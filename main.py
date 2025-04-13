@@ -182,7 +182,7 @@ def test_model(model, test_loader, criterion):
 
 
 def main():
-    device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+    print(DEVICE)
     
     # create model
     model = create_model()
@@ -201,7 +201,7 @@ def main():
     print(f"Found {len(valid_dataset.ink_files)} files in {valid_dataset.split} split")
     print(f"Found {len(test_dataset.ink_files)} files in {test_dataset.split} split")
     
-    print(train_dataset[0])
+    # print(train_dataset[0])
     
 
     train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=False, drop_last=False, collate_fn=collate_variable_length_sequences)
@@ -212,9 +212,9 @@ def main():
     # print(train_dataloader[0])
     
     # inspect one batch
-    for batch in train_dataloader:
-        features, lengths, labels = batch
-        print(lengths)
+    # for batch in train_dataloader:
+    #     features, lengths, labels = batch
+    #     print(lengths)
     
     # train(model, train_dataloader, valid_dataloader, EPOCHS, optimizer, criterion)
     
