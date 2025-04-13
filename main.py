@@ -3,6 +3,7 @@ from torch.utils.data import DataLoader
 from torch.nn.utils.rnn import pad_sequence
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
 
 import os, subprocess
 import tqdm
@@ -111,53 +112,6 @@ def train(model, train_loader, val_loader, epochs, optimizer, criterion):
             torch.save(model.state_dict(), f"model/model_best_{epoch}.pth")
             print(f"model saved as 'model/model_best_{epoch}.pth'.")
 
-def main():
-    device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
-    
-    # create model
-    model = create_model()
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-    criterion = nn.CrossEntropyLoss(ignore_index=LATEX_PAD_TOKEN)  
-
-    root_dir = download_data()
-    print(root_dir)
-    # init dataset
-
-    train_dataset   = HMEDataset(root_dir, "train")
-    valid_dataset   = HMEDataset(root_dir, "valid")
-    test_dataset    = HMEDataset(root_dir, "test")
-    
-    print(f"Found {len(train_dataset.ink_files)} files in {train_dataset.split} split")
-    print(f"Found {len(valid_dataset.ink_files)} files in {valid_dataset.split} split")
-    print(f"Found {len(test_dataset.ink_files)} files in {test_dataset.split} split")
-    
-    print(train_dataset[0])
-    
-
-    train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=False, drop_last=False, collate_fn=collate_variable_length_sequences)
-    valid_dataloader = DataLoader(valid_dataset, batch_size=BATCH_SIZE, shuffle=False, drop_last=False, collate_fn=collate_variable_length_sequences)
-    test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, drop_last=False, collate_fn=collate_variable_length_sequences)
-    
-    print(train_dataloader)
-    # print(train_dataloader[0])
-    
-    # inspect one batch
-    for batch in train_dataloader:
-        features, lengths, labels = batch
-        print(lengths)
-    
-    train(model, train_dataloader, valid_dataloader, EPOCHS, optimizer, criterion)
-    
-    model_path = "model/model_best.pth"
-    if os.path.exists(model_path):
-        print(f"Loading pre-trained model from {model_path}")
-        model.load_state_dict(torch.load(model_path, map_location=device))
-    else:
-        print("Training new model")
-        train(model, train_dataloader, valid_dataloader, EPOCHS, optimizer, criterion)
-    
-
-
 
 def test_model(model, test_loader, criterion):
     model.eval()
@@ -175,10 +129,9 @@ def test_model(model, test_loader, criterion):
             lengths = lengths.to(DEVICE)
             targets = targets.to(DEVICE)
             
-            # Forward pass without teacher forcing
             outputs = model(inputs, lengths, targets, teacher_forcing_ratio=0.0)
             
-            # Calculate loss
+            # calculate loss
             output_dim = outputs.shape[-1]
             outputs_flat = outputs[:, 1:].reshape(-1, output_dim)
             targets_flat = targets[:, 1:].reshape(-1)
@@ -227,6 +180,61 @@ def test_model(model, test_loader, criterion):
     
     return avg_loss, accuracy, examples
 
+
+def main():
+    device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+    
+    # create model
+    model = create_model()
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    criterion = nn.CrossEntropyLoss(ignore_index=LATEX_PAD_TOKEN)  
+
+    root_dir = download_data(url="https://storage.googleapis.com/mathwriting_data/mathwriting-2024.tgz")
+    print(root_dir)
+    # init dataset
+
+    train_dataset   = HMEDataset(root_dir, "train")
+    valid_dataset   = HMEDataset(root_dir, "valid")
+    test_dataset    = HMEDataset(root_dir, "test")
+    
+    print(f"Found {len(train_dataset.ink_files)} files in {train_dataset.split} split")
+    print(f"Found {len(valid_dataset.ink_files)} files in {valid_dataset.split} split")
+    print(f"Found {len(test_dataset.ink_files)} files in {test_dataset.split} split")
+    
+    print(train_dataset[0])
+    
+
+    train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=False, drop_last=False, collate_fn=collate_variable_length_sequences)
+    valid_dataloader = DataLoader(valid_dataset, batch_size=BATCH_SIZE, shuffle=False, drop_last=False, collate_fn=collate_variable_length_sequences)
+    test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, drop_last=False, collate_fn=collate_variable_length_sequences)
+    
+    print(train_dataloader)
+    # print(train_dataloader[0])
+    
+    # inspect one batch
+    for batch in train_dataloader:
+        features, lengths, labels = batch
+        print(lengths)
+    
+    # train(model, train_dataloader, valid_dataloader, EPOCHS, optimizer, criterion)
+    
+    # model_path = "model/model_best_6.pth"
+    # if os.path.exists(model_path):
+    #     print(f"Loading pre-trained model from {model_path}")
+    #     model.load_state_dict(torch.load(model_path, map_location=device))
+    # else:
+    print("Training new model")
+    train(model, train_dataloader, valid_dataloader, EPOCHS, optimizer, criterion)
+        
+    test_model(model, test_dataloader, criterion)
+    
+
+
+
+def indices_to_latex(indices, vocab_reverse):
+    """Convert a sequence of token indices back to LaTeX string"""
+    tokens = [vocab_reverse[idx] for idx in indices if idx in vocab_reverse and idx not in [LATEX_VOCAB['<pad>'], LATEX_VOCAB['<sos>'], LATEX_VOCAB['<eos>']]]
+    return ''.join(tokens)
 
 if __name__ == "__main__":
     main()

@@ -13,6 +13,8 @@ from config import *
 def download_data(url="https://storage.googleapis.com/mathwriting_data/mathwriting-2024-excerpt.tgz"):
     filename = url.split("/")[-1]
     dirname = filename.split('.')[0]
+    
+    
 
     if not os.path.exists(dirname):
         if not os.path.exists(filename):
