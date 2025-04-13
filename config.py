@@ -135,3 +135,6 @@ LATEX_VOCAB = {
 
 LATEX_VOCAB_SIZE = len(LATEX_VOCAB)
 LATEX_PAD_TOKEN = LATEX_VOCAB['<pad>']
+
+# mapping from token --> symbol
+LATEX_VOCAB_REVERSE = {idx: token for token, idx in LATEX_VOCAB.items()}
