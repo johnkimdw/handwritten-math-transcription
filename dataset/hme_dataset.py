@@ -7,19 +7,12 @@ from dataset.hme_ink import *
 class HMEDataset(Dataset):
     def __init__(self, root_dir, split='train', transform=None):
         """
-        Initialize the HMEDataset class.
+        Initializes the HMEDataset class.
         
         Args:
-            root_dir (str):                 The root directory where the dataset is located.
-            split (str, optional):          The split of the dataset to be used, defaults to 'train'.
-            transform (callable, optional): An optional transform to be applied on a sample, defaults to None.
-
-        Attributes:
-            root_dir (str):         The root directory where the dataset is located.
-            split_dir (str):        The directory path for the specified split.
-            transform (callable):   The transform to be applied on a sample.
-            split (str):            The split of the dataset to be used.
-            ink_files (list):       A list of inkml file paths in the specified split directory.
+        - root_dir (str):                 The root directory where the dataset is located.
+        - split (str, optional):          The split of the dataset to be used, defaults to 'train'.
+        - transform (callable, optional): An optional transform to be applied on a sample, defaults to None.
         """
         self.root_dir = root_dir
         self.split_dir = os.path.join(root_dir, split)
@@ -48,7 +41,7 @@ class HMEDataset(Dataset):
         Convert Ink object into stroke features
         
         Args:
-            stroke_data (np.ndarray): Array of shape (N, 3) containing (x, y, t) coordinates
+        - stroke_data (np.ndarray): Array of shape (N, 3) containing (x, y, t) coordinates
             
         Returns:
             torch.Tensor: Tensor of shape (N-1, feature_dim) containing extracted features
@@ -95,11 +88,11 @@ class HMEDataset(Dataset):
                 # first point of stroke flag (not the first point of the first stroke)
                 is_first_point = 1.0 if i == 1 and stroke_idx > 0 else 0.0
                 
-                # Absolute coordinates (normalized)
+                # normalized coordinates
                 x_norm = x_normalized[i]
                 y_norm = y_normalized[i]
                 
-                # Curvature approximation (if we have at least 3 points in this stroke)
+                # curve information
                 curvature = 0.0
                 if i >= 2:
                     prev_direction = math.atan2(
@@ -107,7 +100,7 @@ class HMEDataset(Dataset):
                         x_normalized[i-1] - x_normalized[i-2]
                     ) if (x_normalized[i-1] != x_normalized[i-2] or y_normalized[i-1] != y_normalized[i-2]) else 0
                     
-                    # angular difference (handling the circular nature of angles)
+                    # angle difference
                     angle_diff = direction - prev_direction
                     while angle_diff > math.pi:
                         angle_diff -= 2 * math.pi
@@ -119,7 +112,7 @@ class HMEDataset(Dataset):
                 # stroke id feature to help the model distinguish between strokes
                 stroke_id = float(stroke_idx)
                 
-                # Combine all features
+                # combine all features
                 feature_vector = [
                     dx, dy, dt,            # deltas
                     dir_sin, dir_cos,      # direction (as sin/cos to avoid discontinuity)
