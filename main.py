@@ -17,6 +17,7 @@ from config import *
 from dataset.hme_dataset import HMEDataset
 from model import Encoder, Decoder, Seq2Seq, Attention
 from utils import download_data, tokenize_latex, collate_variable_length_sequences
+from dataset.hme_ink import read_inkml_file
 
 def create_model():
     input_dim = 11                   
@@ -119,7 +120,7 @@ def test_model(model, test_loader, criterion):
     correct_predictions = 0
     total_predictions = 0
     
-    # Store some examples for qualitative analysis
+    # examples to check 
     examples = []
     
     with torch.no_grad():
@@ -138,13 +139,13 @@ def test_model(model, test_loader, criterion):
             loss = criterion(outputs_flat, targets_flat)
             total_loss += loss.item()
             
-            # Calculate accuracy
+            # calculate accuracy
             predictions = outputs.argmax(dim=-1)
             for i in range(len(targets)):
-                pred_seq = predictions[i, 1:].cpu().numpy()  # Skip SOS token
+                pred_seq = predictions[i, 1:].cpu().numpy()  # skip first token for start of sequenc
                 true_seq = targets[i, 1:].cpu().numpy()
                 
-                # Find index of first EOS token or end of sequence
+                # find index of end of sequence token or use end of sequence
                 pred_end = np.argwhere(pred_seq == LATEX_VOCAB['<eos>']).flatten()
                 pred_end = pred_end[0] if len(pred_end) > 0 else len(pred_seq)
                 
@@ -154,13 +155,12 @@ def test_model(model, test_loader, criterion):
                 pred_seq = pred_seq[:pred_end]
                 true_seq = true_seq[:true_end]
                 
-                # Check for exact sequence match
-                if len(pred_seq) == len(true_seq) and np.all(pred_seq == true_seq):
-                    correct_predictions += 1
+                # exact match
+                if len(pred_seq) == len(true_seq) and np.all(pred_seq == true_seq): correct_predictions += 1
                 
                 total_predictions += 1
                 
-                # Store some examples for qualitative analysis
+                # store some examples to check
                 if len(examples) < 5:
                     pred_latex = indices_to_latex(pred_seq, LATEX_VOCAB_REVERSE)
                     true_latex = indices_to_latex(true_seq, LATEX_VOCAB_REVERSE)
@@ -179,6 +179,87 @@ def test_model(model, test_loader, criterion):
         print("-" * 50)
     
     return avg_loss, accuracy, examples
+
+
+
+def inference(model, ink_file_path=None, ink_object=None, max_length=150):
+    """
+    Ink file/object --> model --> LaTeX string
+    
+    Args:
+    - model:            Trained Seq2Seq model
+    - ink_file_path:    Path to inkml file (optional if ink_object is provided)
+    - ink_object:       Ink object (optional if ink_file_path is provided)
+    - max_length:       Maximum length of generated sequence
+        
+    Returns:
+        str: Generated LaTeX string
+    """
+    model.eval()
+    
+    # get the ink object first
+    if ink_object is None and ink_file_path is not None: ink = read_inkml_file(ink_file_path)
+    elif ink_object is not None:  ink = ink_object
+    else: raise ValueError("Either ink_file_path or ink_object must be provided")
+    
+    # ground_truth_latex = ink_object.annotations.get('normalizedLabel')
+
+    
+    # extract features from ink object
+    dataset = HMEDataset(root_dir="mathwriting-2024", split="train")
+    ink_features = dataset.extract_features(ink)
+    ground_truth_latex = ink.annotations['normalizedLabel']
+    
+    # handle empty feature case
+    if ink_features.size(0) == 0: return "<empty_features>"
+    
+    # add batch dimension (1, seq_len, feature_dim)
+    input_tensor = ink_features.unsqueeze(0).to(DEVICE)
+    input_length = torch.tensor([ink_features.size(0)]).to(DEVICE)
+    
+    with torch.no_grad():
+        # initialize with SOS token
+        input_token = torch.tensor([LATEX_VOCAB['<sos>']]).to(DEVICE)
+        
+        # encoder forward pass
+        encoder_outputs, (hidden, cell) = model.encoder(input_tensor, input_length)
+        
+        # handle bidirectional encoder
+        if model.encoder.bidirectional:
+            hidden = hidden.view(model.encoder.num_layers, 2, hidden.size(1), hidden.size(2)).sum(dim=1)
+            cell = cell.view(model.encoder.num_layers, 2, cell.size(1), cell.size(2)).sum(dim=1)
+        
+        # attention mask
+        mask = model.create_mask(input_tensor)
+        
+        # generate sequence
+        output_indices = [LATEX_VOCAB['<sos>']]
+        attention_weights = []
+        
+        for _ in range(max_length):
+            # forward pass through decoder
+            prediction, hidden, cell, attn_weights = model.decoder(
+                input_token, hidden, cell, encoder_outputs, mask
+            )
+            
+            # store attention weights if needed
+            attention_weights.append(attn_weights.squeeze(0).cpu())
+            
+            # get most likely token
+            top_token = prediction.argmax(1).item()
+            output_indices.append(top_token)
+            
+            # end if EOS token
+            if top_token == LATEX_VOCAB['<eos>']:break
+            
+            # update input token for next step
+            input_token = torch.tensor([top_token]).to(DEVICE)
+    
+    # convert indices to LaTeX
+    latex_output = indices_to_latex(output_indices, LATEX_VOCAB_REVERSE)
+    
+    return latex_output, ground_truth_latex, attention_weights
+
 
 
 def main():
@@ -208,8 +289,11 @@ def main():
     valid_dataloader = DataLoader(valid_dataset, batch_size=BATCH_SIZE, shuffle=False, drop_last=False, collate_fn=collate_variable_length_sequences)
     test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, drop_last=False, collate_fn=collate_variable_length_sequences)
     
-    print(train_dataloader)
-    # print(train_dataloader[0])
+    # print(train_dataloader)
+    # print(next(iter(train_dataloader)))
+    
+    
+    
     
     # inspect one batch
     # for batch in train_dataloader:
@@ -218,23 +302,30 @@ def main():
     
     # train(model, train_dataloader, valid_dataloader, EPOCHS, optimizer, criterion)
     
-    # model_path = "model/model_best_6.pth"
-    # if os.path.exists(model_path):
-    #     print(f"Loading pre-trained model from {model_path}")
-    #     model.load_state_dict(torch.load(model_path, map_location=device))
-    # else:
-    print("Training new model")
-    train(model, train_dataloader, valid_dataloader, EPOCHS, optimizer, criterion)
-        
-    test_model(model, test_dataloader, criterion)
+    model_path = "model/model_best_5.pth"
+    if os.path.exists(model_path):
+        print(f"Loading pre-trained model from {model_path}")
+        model.load_state_dict(torch.load(model_path, map_location=DEVICE))
+    else:
+        print("Training new model")
+        train(model, train_dataloader, valid_dataloader, EPOCHS, optimizer, criterion)
     
-
+    
+    ink_path = "/Users/johnkim/Developer/handwritten-math-transcription/mathwriting-2024-excerpt/test/000a4e8ca49c5a1c.inkml"
+    print(f"ink_path: {ink_path}")
+    predicted_latex, actual_latex, attention = inference(model, ink_file_path=ink_path)
+    print(f"Prediction: {predicted_latex}")
+    print(f"Actual: {actual_latex}")
+    
+    # test_model(model, test_dataloader, criterion)
+    
 
 
 def indices_to_latex(indices, vocab_reverse):
     """Convert a sequence of token indices back to LaTeX string"""
     tokens = [vocab_reverse[idx] for idx in indices if idx in vocab_reverse and idx not in [LATEX_VOCAB['<pad>'], LATEX_VOCAB['<sos>'], LATEX_VOCAB['<eos>']]]
     return ''.join(tokens)
+
 
 if __name__ == "__main__":
     main()
