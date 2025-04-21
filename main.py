@@ -185,15 +185,6 @@ def test_model(model, test_loader, criterion):
 def inference(model, ink_file_path=None, ink_object=None, max_length=150):
     """
     Ink file/object --> model --> LaTeX string
-    
-    Args:
-    - model:            Trained Seq2Seq model
-    - ink_file_path:    Path to inkml file (optional if ink_object is provided)
-    - ink_object:       Ink object (optional if ink_file_path is provided)
-    - max_length:       Maximum length of generated sequence
-        
-    Returns:
-        str: Generated LaTeX string
     """
     model.eval()
     
