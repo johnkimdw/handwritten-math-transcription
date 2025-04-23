@@ -169,3 +169,16 @@ As we move forward, we are encountering several challenges and open questions th
 - Tram Trinh:
    - Implemented the encoder, attention module, and decoder for converting handwritten strokes into LaTeX.
    - Developed a method to combine the bidirectional encoder outputs to fit the decoder.
+
+
+ 
+## Part 4 Contributions
+- Team:
+   - Researched how to implement evaluation metrics 
+   - Developed part of evaluation metrics that were used.
+- John Kim:
+   - Created test model and inference functions to allow for evaluation and working with the model
+   - ...
+- Tram Trinh:
+   - Implemented the encoder, attention module, and decoder for converting handwritten strokes into LaTeX.
+   - ...
