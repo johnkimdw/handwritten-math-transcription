@@ -11,6 +11,7 @@ from matplotlib.colors import LinearSegmentedColormap
 import math
 import json
 from datetime import datetime
+from config import *
 
 def evaluate_hme_model(model, data_loader, criterion, latex_vocab_reverse, device="cuda"):
     """

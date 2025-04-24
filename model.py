@@ -8,17 +8,26 @@ import subprocess
 from config import *
 
 class Encoder(nn.Module):
-    def __init__(self, input_dim, hidden_dim, num_layers=2, bidirectional=True):
+    def __init__(self, input_dim, proj_dim=64, hidden_dim=128, num_layers=1, bidirectional=True, dropout=0.2):
         super(Encoder, self).__init__()
-        self.hidden_dim = hidden_dim
-        self.num_layers = num_layers
+        self.num_layers    = num_layers
         self.bidirectional = bidirectional
-        self.lstm = nn.LSTM(input_dim, hidden_dim, num_layers=num_layers, 
-                            bidirectional=bidirectional, batch_first=True)
-        
+        self.proj = nn.Sequential(
+            nn.Linear(input_dim, proj_dim),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+        )
+        self.lstm = nn.LSTM(
+            proj_dim, hidden_dim, num_layers=num_layers,
+            bidirectional=bidirectional, batch_first=True,
+            dropout=dropout if num_layers>1 else 0
+        )
+
     def forward(self, x, lengths):
-        # pack the padded sequences for the LSTM
-        packed = nn.utils.rnn.pack_padded_sequence(x, lengths.cpu(), batch_first=True, enforce_sorted=False)
+        # x: (B, T, input_dim)
+        x = self.proj(x)  # (B, T, proj_dim)
+        packed = nn.utils.rnn.pack_padded_sequence(
+            x, lengths.cpu(), batch_first=True, enforce_sorted=False)
         o, (h, c) = self.lstm(packed)
         o, _ = nn.utils.rnn.pad_packed_sequence(o, batch_first=True)
         return o, (h, c)
