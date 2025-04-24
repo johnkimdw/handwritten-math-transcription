@@ -339,7 +339,7 @@ def main():
     else:
         print("Training new model…")
         train(model, train_loader, valid_loader)
-        
+
     ink_path = os.path.join(data_root, "test/00c46c9b07b39bb7.inkml")
     print(f"\nExample inference on {ink_path}")
     pred, gt, _ = inference(model, ink_file_path=ink_path)
@@ -353,8 +353,6 @@ def main():
     )
 
     
-
-
 def indices_to_latex(indices, vocab_reverse):
     """Convert a sequence of token indices back to LaTeX string"""
     tokens = [vocab_reverse[idx] for idx in indices if idx in vocab_reverse and idx not in [LATEX_VOCAB['<pad>'], LATEX_VOCAB['<sos>'], LATEX_VOCAB['<eos>']]]

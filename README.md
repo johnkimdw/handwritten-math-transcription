@@ -142,14 +142,14 @@ The decoder takes the information from the encoder and the attention module to g
 
 The encoder is bidirectional, so its hidden state is made up of two parts (one for reading from the start and one from the end). We combine these two parts (by summing them) so that the hidden state matches what the decoder expects. This is important to ensure that the model uses information from both directions.
 
-## Why This Architecture?
+### Why This Architecture?
 
 Our design is inspired by several projects that uses similar ideas:
 - **CROHME (Competition on Recognition of Online Handwritten Mathematical Expressions):** Many projects in this challenge use encoder-decoder architecture with attention to handle the complex layouts of math expressions, so we decided to give it a try.
 - **[Im2LaTeX](https://github.com/d-gurgurov/im2latex)**: This is a project that converts images (.PNG) of math expressions into LaTeX code using neural networks. 
 - **Simple OCR and Sequence-to-Sequence Models:** Other simpler projects, like basic OCR systems for handwritten digits (using MNIST), have shown that sequence models can learn and convert images or strokes into text. These projects helped us understand the basics before moving on to more complex math expressions.
 
-## Challenges
+### Challenges
 
 As we move forward, we are encountering several challenges and open questions that we hope to discuss with Adam and Rasel for further guidance:
 
@@ -158,7 +158,7 @@ As we move forward, we are encountering several challenges and open questions th
 - Our model currently uses a set of hyperparameters (e.g., number of layers, hidden dimensions, learning rate) that were chosen based on preliminary experiments. However, fine-tuning these parameters is important for achieving optimal performance. Should we consider automated hyperparameter tuning methods, such as grid search or Bayesian optimization?
 - Our project plan includes a second stage where an LLM is used to correct the raw LaTeX output. We are currently exploring which open-source LLM would be best suited for this task. How should we interface the output of our transcription model with the correction module?
 
-## Part 3 Contributions
+### Part 3 Contributions
 - Team:
    - Reseached projects to guide our design.
    - Designed the model architecture using a sequence-to-sequence approach with an attention mechanism.
@@ -176,45 +176,46 @@ As we move forward, we are encountering several challenges and open questions th
 
 All code lives in **`main.py`**. To reproduce our first results:
 
-1. **Install dependencies**  
-   ```
-   pip install -r requirements.txt
-   ```
+**Install dependencies**  
+```
+pip install -r requirements.txt
+```
 
 ### Train & Validate 
 
-   ```
-   python main.py
-   ```
+```
+python main.py
+```
 - Trains on 20 000 random train examples
 - Validates on 5 000 random valid examples
 - Saves best model to `model/model_best.pth`
 - Note: main.py does not yet accept CLI arguments — all paths, subset sizes, batch-size, epochs, etc. are hard-coded.
 
 ### Single Example Inference
-   ```
-   python main.py
-   ```
+```
+python main.py
+```
 - After training or loading a checkpoint, `main.py` runs:
 
-   ```
-   ink_path = os.path.join(data_root, "test/00c46c9b07b39bb7.inkml")
-   print(f"\nExample inference on {ink_path}")
-   pred, gt, _ = inference(model, ink_file_path=ink_path)
-   print(f"Predicted: {pred}")
-   print(f"Actual: {gt}")
-   ```
+```python 
+ink_path = os.path.join(data_root, "test/00c46c9b07b39bb7.inkml")
+print(f"\nExample inference on {ink_path}")
+pred, gt, _ = inference(model, ink_file_path=ink_path)
+print(f"Predicted: {pred}")
+print(f"Actual: {gt}")
+```
 
 ### Test Evaluation
 - At the end of `main.py`:
 
-   ```
-   print("\nFull test evaluation:")
-   test_model(
-      model, test_loader,
-      nn.CrossEntropyLoss(ignore_index=LATEX_PAD_TOKEN, label_smoothing=0.1)
-   )
-   ```
+```python 
+print("\nFull test evaluation:")
+test_model(
+   model, test_loader,
+   nn.CrossEntropyLoss(ignore_index=LATEX_PAD_TOKEN, label_smoothing=0.1)
+)
+```
+
 - Report test loss, exact-match accuracy, and 5 sample predictions.
 
 ![Example Testing Result](example-testing.png)
@@ -223,7 +224,7 @@ All code lives in **`main.py`**. To reproduce our first results:
 We trained for **50 epochs**, decaying teacher forcing from 0.83 → 0.00.  
 Below is the loss curve on train vs. validation, plus our exact‐match and CER metrics.
 
-![Training vs. Validation Loss](first_result.png)
+![Training vs. Validation Loss](first-result.png)
 
 ### 2.2 Key Metrics
 
