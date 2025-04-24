@@ -226,7 +226,7 @@ Below is the loss curve on train vs. validation, plus our exact‐match and CER 
 
 ![Training vs. Validation Loss](first-result.png)
 
-### 2.2 Key Metrics
+### Key Metrics
 
 | Metric                             | Value    |
 |-----------------------------------:|:---------|
