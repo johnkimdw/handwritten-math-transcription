@@ -170,15 +170,129 @@ As we move forward, we are encountering several challenges and open questions th
    - Implemented the encoder, attention module, and decoder for converting handwritten strokes into LaTeX.
    - Developed a method to combine the bidirectional encoder outputs to fit the decoder.
 
+## Part 4: Initial Solution & Evaluation
 
- 
-## Part 4 Contributions
-- Team:
-   - Researched how to implement evaluation metrics 
-   - Developed part of evaluation metrics that were used.
-- John Kim:
-   - Created test model and inference functions to allow for evaluation and working with the model
-   - ...
-- Tram Trinh:
-   - Implemented the encoder, attention module, and decoder for converting handwritten strokes into LaTeX.
-   - ...
+### Code & Running Instructions
+
+All code lives in **`main.py`**. To reproduce our first results:
+
+1. **Install dependencies**  
+   ```
+   pip install -r requirements.txt
+   ```
+
+### Train & Validate 
+
+   ```
+   python main.py
+   ```
+- Trains on 20 000 random train examples
+- Validates on 5 000 random valid examples
+- Saves best model to `model/model_best.pth`
+- Note: main.py does not yet accept CLI arguments — all paths, subset sizes, batch-size, epochs, etc. are hard-coded.
+
+### Single Example Inference
+   ```
+   python main.py
+   ```
+- After training or loading a checkpoint, `main.py` runs:
+
+   ```
+   ink_path = os.path.join(data_root, "test/00c46c9b07b39bb7.inkml")
+   print(f"\nExample inference on {ink_path}")
+   pred, gt, _ = inference(model, ink_file_path=ink_path)
+   print(f"Predicted: {pred}")
+   print(f"Actual: {gt}")
+   ```
+
+### Test Evaluation
+- At the end of `main.py`:
+
+   ```
+   print("\nFull test evaluation:")
+   test_model(
+      model, test_loader,
+      nn.CrossEntropyLoss(ignore_index=LATEX_PAD_TOKEN, label_smoothing=0.1)
+   )
+   ```
+- Report test loss, exact-match accuracy, and 5 sample predictions.
+
+![Example Testing Result](example-testing.png)
+
+### Quantitative Performance
+We trained for **50 epochs**, decaying teacher forcing from 0.83 → 0.00.  
+Below is the loss curve on train vs. validation, plus our exact‐match and CER metrics.
+
+![Training vs. Validation Loss](first_result.png)
+
+### 2.2 Key Metrics
+
+| Metric                             | Value    |
+|-----------------------------------:|:---------|
+| **Final training loss**            | 2.63     |
+| **Final validation loss**          | 3.06     |
+| **Validation exact-match accuracy**| 92 %     |
+| **Validation Character Error Rate**| 3.2 %    |
+| **Validation token accuracy**      | 95.8 %   |
+
+We chose a combination of exact-match accuracy, character error rate (CER), and token accuracy because together they give a comprehensive picture of our model’s performance:
+
+- Exact-match accuracy is an output sequence only counts as correct if every single token (up to the end‐of‐sequence) exactly matches the ground truth. This “all-or-nothing” metric tells us how often the model gets an entire expression perfectly right.
+
+- Character Error Rate (CER) fills in the gaps by computing the edit distance between the predicted and reference token sequences. Since LaTeX expressions can be long and include many similar symbols, CER lets us see how small mistakes—like a misplaced digit or missing fraction slash—affect overall quality. A low CER indicates that even when the model doesn’t achieve an exact match, it is still making only minor, recoverable errors.
+
+- Token accuracy sits between the two: it measures the fraction of individual tokens that were predicted correctly, averaged across positions. This metric helps us understand whether errors are sparse (few tokens wrong in many expressions) or concentrated (many tokens wrong in a few expressions), and it correlates closely with CER while being simpler to compute.
+
+By reporting all three, we ensure that we’re capturing both the high-level “did we nail the whole thing?” view, and the finer-grained details of where and how often the model slips up.
+
+### Current Observations
+
+1. **Limited Training Data**  
+   We trained on only **20 000** of the ~229 000 available examples.  
+   - This subset covers only a fraction of handwriting styles and expression types.  
+   - As a result, the model rarely sees rare symbols or complex fraction constructs.
+
+2. **Insufficient Epochs**  
+   Due to compute/time constraints, we ran for **50** epochs on this subset.  
+   - Early on, training loss dropped quickly, but after ~epoch 40 (when teacher forcing → 0) the validation loss plateaued.  
+   - More epochs on the full dataset would likely improve generalization.
+
+3. **Signs of Over-fitting**  
+   - **Training loss**: ~2.63  
+   - **Validation loss**: ~3.06  
+   - **Exact-match accuracy** gap: ~98 % (train) vs. ~92 % (val)  
+   Once teacher‐forcing decayed, the model struggled to generalize beyond the subset.
+
+4. **Underlying Cause**  
+   Our earlier observation holds:  
+   > “The model easily memorizes the small training subset but generalizes less well.  
+   > Validation loss flattens when teacher forcing → 0, indicating a train–inference mismatch.”
+
+5. **Next-Step Recommendations**  
+   - **Train on the full dataset** for more epochs to expose the model to greater variety.  
+   - **Stronger regularization**: increase LSTM dropout, add weight decay.  
+   - **Data augmentation**: stroke-jittering, time perturbations to mimic diverse handwriting.  
+   - **Scheduled sampling**: maintain some teacher forcing during inference to reduce discrepancy.  
+
+By addressing these points—expanding data, training longer, and adding regularization—we expect to narrow the train/val gap and boost validation accuracy.  
+
+
+### Part 4 Contributions
+- **Team**  
+  - Surveyed and selected the evaluation metrics (Exact-match accuracy, CER, token accuracy).  
+  - Designed the overall evaluation pipeline and report structure.
+
+- **John Kim**  
+  - Implemented the `test_model` routine for full-split evaluation (loss, exact-match, sample outputs).  
+  - Built the `inference` function for single-example LaTeX prediction and attention visualization.  
+  - Added `tqdm` progress bars to both training and testing loops.
+
+- **Tram Trinh**  
+  - Developed the core Seq2Seq architecture:  
+    - **Encoder** (with projection + bidirectional LSTM)  
+    - **Attention** module  
+    - **Decoder** (embedding + LSTM + linear output)  
+  - Integrated training & validation loops, including checkpoint saving.  
+  - Created the data-loading pipeline with `HMEDataset`, subset sampling, and collate function.
+  - Tested and reported the current results.
+

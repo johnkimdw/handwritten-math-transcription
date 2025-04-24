@@ -161,66 +161,50 @@ def test_model(model, test_loader, criterion):
     total_loss = 0.0
     correct = 0
     total = 0
-    
-    # examples to check 
     examples = []
-
     EOS = LATEX_VOCAB['<eos>']
-    
-    with torch.no_grad():
-        for src, lengths, trg in test_loader:
-            # move to device
-            src, lengths, trg = src.to(DEVICE), lengths.to(DEVICE), trg.to(DEVICE)
 
-            # forward with no teacher forcing
-            outputs = model(src, lengths, trg, tf_ratio=0.0)  
-            B, T, V = outputs.size()
+    for src, lengths, trg in tqdm(test_loader, desc="testing", leave=False):
+        src, lengths, trg = src.to(DEVICE), lengths.to(DEVICE), trg.to(DEVICE)
 
-            # compute loss (skip the first SOS step)
-            loss = criterion(
-                outputs[:, 1:].reshape(-1, V),
-                trg[:,    1:].reshape(-1)
-            )
-            total_loss += loss.item()
+        # no teacher forcing
+        outputs = model(src, lengths, trg, teacher_forcing_ratio=0.0)
+        B, T, V = outputs.size()
 
-            # greedy predictions
-            preds = outputs.argmax(dim=-1)  # (B, T)
+        # compute and accumulate loss
+        loss = criterion(
+            outputs[:, 1:].reshape(-1, V),
+            trg[:,    1:].reshape(-1)
+        )
+        total_loss += loss.item()
 
-            # compare each sequence
-            for i in range(B):
-                pred_seq = preds[i, 1:].tolist()
-                true_seq =  trg[i, 1:].tolist()
-
-                # truncate at EOS if present
-                if EOS in pred_seq:
-                    pred_seq = pred_seq[:pred_seq.index(EOS)]
-                if EOS in true_seq:
-                    true_seq = true_seq[:true_seq.index(EOS)]
-
-                # exact-match check
-                if pred_seq == true_seq:
-                    correct += 1
-
-                # collect up to 5 examples
-                if len(examples) < 5:
-                    pred_ltx = indices_to_latex(pred_seq, LATEX_VOCAB_REVERSE)
-                    true_ltx = indices_to_latex(true_seq, LATEX_VOCAB_REVERSE)
-                    examples.append((pred_ltx, true_ltx))
-
-                total += 1
+        # greedy decode and accuracy counting
+        preds = outputs.argmax(dim=-1)
+        for i in range(B):
+            pseq = preds[i,1:].tolist()
+            tseq = trg[i,1:].tolist()
+            if EOS in pseq: pseq = pseq[:pseq.index(EOS)]
+            if EOS in tseq: tseq = tseq[:tseq.index(EOS)]
+            if pseq == tseq:
+                correct += 1
+            if len(examples) < 5:
+                examples.append((
+                    indices_to_latex(pseq, LATEX_VOCAB_REVERSE),
+                    indices_to_latex(tseq, LATEX_VOCAB_REVERSE)
+                ))
+            total += 1
 
     avg_loss = total_loss / len(test_loader)
-    exact_match_acc = correct / total if total > 0 else 0.0
+    exact_match_acc = correct / total if total else 0.0
 
     print(f"Test Loss: {avg_loss:.4f}")
-    print(f"Accuracy:  {exact_match_acc:.4f} ({correct}/{total})\n")
-    print("Some sample predictions:")
+    print(f"Exact Match Accuracy: {exact_match_acc:.4f} ({correct}/{total})\n")
+    print("Sample predictions:")
     for pred, true in examples:
         print(f"Predicted: {pred}")
-        print(f"Actual:    {true}")
+        print(f"Actual: {true}\n")
 
     return avg_loss, exact_match_acc, examples
-
 
 
 def inference(model, ink_file_path=None, ink_object=None, max_length=150):
@@ -295,76 +279,78 @@ def inference(model, ink_file_path=None, ink_object=None, max_length=150):
 
 
 def main():
-    print(DEVICE)
-    
-    # # create model
-    # model = create_model()
-    # optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-    criterion = nn.CrossEntropyLoss(ignore_index=LATEX_PAD_TOKEN, label_smoothing=0.1)  
+    print("Device:", DEVICE)
 
-    root_dir = download_data(url="https://storage.googleapis.com/mathwriting_data/mathwriting-2024.tgz")
-    print(root_dir)
-    # init dataset
+    data_root = download_data("https://storage.googleapis.com/mathwriting_data/mathwriting-2024.tgz")
+    print("Data at:", data_root)
+    full_train_ds = HMEDataset(data_root, "train")
+    full_val_ds   = HMEDataset(data_root, "valid")
+    full_test_ds  = HMEDataset(data_root, "test")
+    print(f"Full sizes → train: {len(full_train_ds)}, valid: {len(full_val_ds)}, test: {len(full_test_ds)}")
 
-    full_train_dataset   = HMEDataset(root_dir, "train")
-    valid_dataset   = HMEDataset(root_dir, "valid")
-    test_dataset    = HMEDataset(root_dir, "test")
+    TRAIN_SUBSET_SIZE = 20_000
+    VAL_SUBSET_SIZE   = 5_000
+    TEST_SUBSET_SIZE  = 5_000
 
-    print(f"Found {len(full_train_dataset.ink_files)} files in {full_train_dataset.split} split")
-    print(f"Found {len(valid_dataset.ink_files)} files in {valid_dataset.split} split")
-    print(f"Found {len(test_dataset.ink_files)} files in {test_dataset.split} split")
+    def sample(ds, size, seed):
+        idxs = list(range(len(ds)))
+        random.Random(seed).shuffle(idxs)
+        return Subset(ds, idxs[:size])
 
-    SUBSET_SIZE = 50000
-    all_idx     = list(range(len(full_train_dataset)))
-    random.shuffle(all_idx)
-    subset_idx  = all_idx[:SUBSET_SIZE]
-    train_dataset    = Subset(full_train_dataset, subset_idx)
-    
-    # print(train_dataset[0])
-    
+    train_ds = sample(full_train_ds, TRAIN_SUBSET_SIZE, seed=42)
+    val_ds   = sample(full_val_ds,   VAL_SUBSET_SIZE,   seed=43)
+    test_ds  = sample(full_test_ds,  TEST_SUBSET_SIZE,  seed=44)
 
-    train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, drop_last=False, collate_fn=collate_variable_length_sequences)
-    valid_dataloader = DataLoader(valid_dataset, batch_size=BATCH_SIZE, shuffle=False, drop_last=False, collate_fn=collate_variable_length_sequences)
-    test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, drop_last=False, collate_fn=collate_variable_length_sequences)
-    
-    # print(train_dataloader)
-    # print(next(iter(train_dataloader)))
+    print(f"Subset sizes → train: {len(train_ds)}, valid: {len(val_ds)}, test: {len(test_ds)}")
 
-    sample_feat, _ = train_dataset[0]           
-    input_dim = sample_feat.shape[1]
-    
-    encoder = Encoder(input_dim=input_dim)
+    train_loader = DataLoader(
+        train_ds, batch_size=BATCH_SIZE, shuffle=True,
+        collate_fn=collate_variable_length_sequences
+    )
+    valid_loader = DataLoader(
+        val_ds, batch_size=BATCH_SIZE, shuffle=False,
+        collate_fn=collate_variable_length_sequences
+    )
+    test_loader = DataLoader(
+        test_ds, batch_size=BATCH_SIZE, shuffle=False,
+        collate_fn=collate_variable_length_sequences
+    )
+
+    feat0, _ = train_ds[0]
+    input_dim = feat0.shape[1]
+    encoder = Encoder(
+        input_dim=input_dim,
+        proj_dim=64, hidden_dim=128,
+        num_layers=1, bidirectional=True, dropout=0.2
+    )
     decoder = Decoder(
-        output_dim=len(LATEX_VOCAB), 
-        embed_dim=64, encoder_hidden_dim=128, decoder_hidden_dim=128
+        output_dim=len(LATEX_VOCAB),
+        embed_dim=64,
+        encoder_hidden_dim=128,
+        decoder_hidden_dim=128,
+        num_layers=1
     )
     model = Seq2Seq(encoder, decoder, DEVICE).to(DEVICE)
-    
-    
-    # inspect one batch
-    # for batch in train_dataloader:
-    #     features, lengths, labels = batch
-    #     print(lengths)
-    
-    # train(model, train_dataloader, valid_dataloader, EPOCHS, optimizer, criterion)
-    
-    model_path = "model/model_best.pth"
-    if os.path.exists(model_path):
-        print(f"Loading pre-trained model from {model_path}")
-        model.load_state_dict(torch.load(model_path, map_location=DEVICE))
-    else:
-        print("Training new model")
-        train(model, train_dataloader, valid_dataloader, epochs=EPOCHS, lr=1e-3)
-    
-    
-    ink_path = "mathwriting-2024/test/0a0b310001bedb73.inkml"
-    print(f"ink_path: {ink_path}")
-    predicted_latex, actual_latex, attention = inference(model, ink_file_path=ink_path)
-    print(f"Prediction: {predicted_latex}")
-    print(f"Actual: {actual_latex}")
 
-    print("Running full evaluation on TEST split:")
-    test_loss, test_acc, examples = test_model(model, test_dataloader, criterion)
+    ckpt = "model/model_best.pth"
+    if os.path.exists(ckpt):
+        print("Loading checkpoint…")
+        model.load_state_dict(torch.load(ckpt, map_location=DEVICE))
+    else:
+        print("Training new model…")
+        train(model, train_loader, valid_loader)
+        
+    ink_path = os.path.join(data_root, "test/00c46c9b07b39bb7.inkml")
+    print(f"\nExample inference on {ink_path}")
+    pred, gt, _ = inference(model, ink_file_path=ink_path)
+    print(f"Predicted: {pred}")
+    print(f"Actual:    {gt}")
+
+    print("\nFull test evaluation:")
+    test_model(
+        model, test_loader,
+        nn.CrossEntropyLoss(ignore_index=LATEX_PAD_TOKEN, label_smoothing=0.1)
+    )
 
     
 
