@@ -264,23 +264,21 @@ By reporting all three, we ensure that we’re capturing both the high-level “
    - **Exact-match accuracy** gap: ~98 % (train) vs. ~92 % (val)  
    Once teacher‐forcing decayed, the model struggled to generalize beyond the subset.
 
-4. **Underlying Cause**  
-   Our earlier observation holds:  
-   > “The model easily memorizes the small training subset but generalizes less well.  
-   > Validation loss flattens when teacher forcing → 0, indicating a train–inference mismatch.”
+4. **Challenges**  
+   - The model easily memorizes the small training subset but generalizes less well.  
+   - Validation loss flattens when teacher forcing → 0, indicating a train–inference mismatch.
 
 5. **Next-Step Recommendations**  
    - **Train on the full dataset** for more epochs to expose the model to greater variety.  
    - **Stronger regularization**: increase LSTM dropout, add weight decay.  
-   - **Data augmentation**: stroke-jittering, time perturbations to mimic diverse handwriting.  
    - **Scheduled sampling**: maintain some teacher forcing during inference to reduce discrepancy.  
 
-By addressing these points—expanding data, training longer, and adding regularization—we expect to narrow the train/val gap and boost validation accuracy.  
+By addressing these points, expanding data, training longer, and adding regularization, we expect to narrow the train/val gap and boost validation accuracy.  
 
 
 ### Part 4 Contributions
 - **Team**  
-  - Surveyed and selected the evaluation metrics (Exact-match accuracy, CER, token accuracy).  
+  - Selected the evaluation metrics (Exact-match accuracy, CER, token accuracy).  
   - Designed the overall evaluation pipeline and report structure.
 
 - **John Kim**  
