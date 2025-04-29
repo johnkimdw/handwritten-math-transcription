@@ -332,7 +332,7 @@ def main():
     )
     model = Seq2Seq(encoder, decoder, DEVICE).to(DEVICE)
 
-    ckpt = "model/model_best.pth"
+    ckpt = "model/model_best_crc_full_data.pth"
     if os.path.exists(ckpt):
         print("Loading checkpoint…")
         model.load_state_dict(torch.load(ckpt, map_location=DEVICE))
