@@ -35,7 +35,7 @@ from dataset.hme_ink import read_inkml_file
 #     model = Seq2Seq(encoder, decoder, DEVICE).to(DEVICE)
 #     return model
 
-def train(model, train_loader, val_loader, epochs=100, lr=1e-3, clip=1.0, pad_idx=0):
+def train(model, train_loader, val_loader, epochs=50, lr=1e-3, clip=1.0, pad_idx=0):
     if not os.path.exists("model"):
         os.makedirs("model")
 
@@ -288,9 +288,9 @@ def main():
     full_test_ds  = HMEDataset(data_root, "test")
     print(f"Full sizes → train: {len(full_train_ds)}, valid: {len(full_val_ds)}, test: {len(full_test_ds)}")
 
-    TRAIN_SUBSET_SIZE = 20_000
-    VAL_SUBSET_SIZE   = 5_000
-    TEST_SUBSET_SIZE  = 5_000
+    TRAIN_SUBSET_SIZE = 10_000
+    VAL_SUBSET_SIZE   = 2_000
+    TEST_SUBSET_SIZE  = 2_000
 
     def sample(ds, size, seed):
         idxs = list(range(len(ds)))
@@ -319,16 +319,21 @@ def main():
     feat0, _ = train_ds[0]
     input_dim = feat0.shape[1]
     encoder = Encoder(
-        input_dim=input_dim,
-        proj_dim=64, hidden_dim=128,
-        num_layers=1, bidirectional=True, dropout=0.2
+        input_dim=input_dim, 
+        proj_dim=128,           
+        hidden_dim=256,         
+        num_layers=2,           
+        bidirectional=True,     
+        dropout=0.3             
     )
     decoder = Decoder(
         output_dim=len(LATEX_VOCAB),
-        embed_dim=64,
-        encoder_hidden_dim=128,
-        decoder_hidden_dim=128,
-        num_layers=1
+        embed_dim=128,          
+        encoder_hidden_dim=256, 
+        decoder_hidden_dim=256, 
+        num_layers=2,           
+        dropout=0.3,            
+        num_heads=4             
     )
     model = Seq2Seq(encoder, decoder, DEVICE).to(DEVICE)
 
