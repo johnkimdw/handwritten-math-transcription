@@ -17,7 +17,7 @@ from torch.utils.data import Subset
 
 from config import *
 from dataset.hme_dataset import HMEDataset
-from model import Encoder, Decoder, Seq2Seq, Attention
+from model import Encoder, Decoder, Seq2Seq
 from utils import download_data, tokenize_latex, collate_variable_length_sequences
 from dataset.hme_ink import read_inkml_file
 
@@ -81,7 +81,7 @@ def train(model, train_loader, val_loader, epochs=50, lr=1e-3, clip=1.0, pad_idx
 
         if avg_v < best:
             best = avg_v
-            torch.save(model.state_dict(), "model_best.pth")
+            torch.save(model.state_dict(), f"model_multi_{epoch}.pth")
         print(f"epoch {epoch} average train loss={avg_tr:.4f}  average val loss={avg_v:.4f}  tf={tf_ratio(epoch):.2f}")
 
 
