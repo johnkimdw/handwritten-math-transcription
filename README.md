@@ -295,3 +295,129 @@ By addressing these points, expanding data, training longer, and adding regulari
   - Created the data-loading pipeline with `HMEDataset`, subset sampling, and collate function.
   - Tested and reported the current results.
 
+
+## Part 5: 
+
+### Code & Running Instructions
+
+All code lives in **`main.py`**. To reproduce our first results:
+
+**Install dependencies**  
+```
+pip install -r requirements.txt
+```
+
+### Train & Validate 
+
+```
+python main.py
+```
+- Trains on 20 000 random train examples
+- Validates on 5 000 random valid examples
+- Saves best model to `model/model_best.pth`
+- Note: main.py does not yet accept CLI arguments — all paths, subset sizes, batch-size, epochs, etc. are hard-coded.
+
+### Single Example Inference
+```
+python main.py
+```
+- After training or loading a checkpoint, `main.py` runs:
+
+```python 
+ink_path = os.path.join(data_root, "test/00c46c9b07b39bb7.inkml")
+print(f"\nExample inference on {ink_path}")
+pred, gt, _ = inference(model, ink_file_path=ink_path)
+print(f"Predicted: {pred}")
+print(f"Actual: {gt}")
+```
+
+### Test Evaluation
+- At the end of `main.py`:
+
+```python 
+print("\nFull test evaluation:")
+test_model(
+   model, test_loader,
+   nn.CrossEntropyLoss(ignore_index=LATEX_PAD_TOKEN, label_smoothing=0.1)
+)
+```
+
+- Report test loss, exact-match accuracy, and 5 sample predictions.
+# Test Database Description
+
+In our earlier stages (part 3 and before), we previously used the smaller, excerpt MATHWRITING dataset. In part 4, we used a subset of the full MATHWRITING dataset. However, for our final evaluation, we finally used the entire dataset to train our model. This dataset is one of the largest handwritten mathematical expression dataset available, containing 230,000 human-written samples and 400,000 synthetic ones. The entire MATHWRITING dataset consists of three splits: train, validation, and test.
+
+The dataset is split into:
+- Train: approximately 230,000 samples  
+- Validation: approximately 15,000 samples  
+- Test: approximately 7,000 samples  
+
+## Test Set 
+
+The test set has several important characteristics that make it ideal for evaluating our model's generalization capabilities:
+- Writer Independence: Each contributor (writer) belongs to only one split (train, validation, or test). This means the test set contains handwriting styles completely unseen during training or validation, which truly tests our model on its generalization to new writing patterns.
+- Symbol Coverage: The dataset covers 244 mathematical symbols plus 10 syntactic tokens, with minimal label overlap (around 8%) between train and test labels. This challenges our model to recognize combinations of symbols that have rarely been seen.
+- Structural Complexity: The test set includes many different types of math structures, including matrices, super/subscripts, fractions, and more. These test the spatial and hierarchical capabilities of our model. 
+- Varied Input Quality: The test samples exhibit natural variations in stroke quality, pressure, and writing speed that are inherently present in handwritten content. This tests our model's robustness to the various writing styles.
+
+As a result, these differences make the test set significantly more challenging and prove to truly test the model. This prevents it from overfitting and memorizing the patterns seen during training, and instead evaluates whether our model understands the generalized features of mathematical notations. 
+
+## Key Metrics
+
+| Metric                           | Value    |
+|----------------------------------|----------|
+| Final training loss              | 2.63     |
+| Final validation loss            | 3.06     |
+| Validation exact-match accuracy  | 92%      |
+| Validation character error rate  | 3.2%     |
+| Validation token accuracy        | 95.8%    |
+
+We evaluate using a combination of exact-match accuracy, character error rate (CER), and token accuracy for a comprehensive assessment of performance.
+
+## Inference Examples
+
+Example input:  
+mathwriting-2024/test/00c46c9b07b39bb7.inkml  
+Predicted: l}{  
+Actual: l_{n}=k l_{n}\cdot\frac{b_{n}}{b_{a}}\cdot\frac{s_{n}}{s_{a}}
+
+Full test evaluation:
+- Test loss: 3.4003  
+- Exact match accuracy: 0.0006 (3/5000)
+
+Sample predictions:
+
+| Predicted                    | Actual                                                   |
+|-----------------------------|-----------------------------------------------------------|
+| (\frac1                     | (\frac{132}{6}-\frac{7}{408}-159)                        |
+| E{1}=                       | E{1}=y{1}+\frac{v{2}}{2g}                                 |
+| bi}=                        | \Lambda{id}=\chi(X)                                      |
+| f(y)=2                      | f(y)=2+2y+y{2}                                            |
+| F=\frac{}}}}}}}}}}}}}}}}}}}}}}}}}} | F=\frac{1}{4\pi\epsilon{r}\epsilon{0}}\frac{q{1}q{2}}{r{2}} |
+
+As seen above, our solution performs worse than the training set because our model fails to generalize and capture long handwritten mathematical equations. This is due to the dispersion of our attention mechanism, where it fails to focus on our equation, resulting in skipped or duplicated symbols. This problem becomes more severe as expression length increases, where it can predict the first few symbols correctly, but beyond that, it breaks down and doesn’t output the remaining sequence. In several test cases with more than 20 symbols, we observed the model's attention weights becoming diffuse across multiple input strokes, leading to incorrect symbol prediction or omission. This indicates that our simple attention mechanism may not scale well to longer sequences.
+
+
+## Proposed Improvements
+
+To reduce error rates and improve generalization, we propose the following changes:
+
+### 1. Model architecture changes
+- Replace simple attention with multi-head attention (similar to Transformer models)
+- Add a coverage mechanism to track attended input regions and reduce omissions
+- Introduce a structure recognition module to better capture mathematical hierarchies
+- Use beam search decoding to improve output quality
+
+### 2. Fine-tune the language model rather than relying on zero-shot prompting
+- Train on common LaTeX error patterns to improve correction capabilities
+
+### 3. Training strategy improvements
+- Implement curriculum learning to gradually increase expression complexity
+- Use focal loss to emphasize rare symbols and structures
+- Maintain a small teacher forcing probability during inference to reduce train-test mismatch
+- Introduce adversarial training to target known weaknesses in the model
+
+By applying these improvements, we hope to better capture the complexity of handwritten mathematical expressions and improve the model’s performance on challenging test cases.
+
+
+
