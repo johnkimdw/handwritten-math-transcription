@@ -109,6 +109,8 @@ class Decoder(nn.Module):
             nn.Dropout(dropout),
             nn.Linear(decoder_hidden_dim, output_dim)
         )
+
+        self.layer_norm = nn.LayerNorm(output_dim)
     
     def forward(self, input, hidden, cell, encoder_outputs, mask):
         # input: (batch,) current token
