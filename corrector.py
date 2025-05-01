@@ -2,7 +2,6 @@ import os
 import openai
 from dotenv import load_dotenv
 
-
 # few‐shot prompt template
 BASE_PROMPT = """
 You are a LaTeX correction assistant.
@@ -21,35 +20,41 @@ Output: \\frac{{1}}{{\\frac{{2}}{{3}}}}
 Input:  a_{{n}}=k l_{{n}}\\cdot\\frac{{b_{{n}}}}{{b_{{a}}}}\\cdot\\frac{{s_{{n}}}}{{s_{{a}}}}  
 Output: a_{{n}} = k\\,l_{{n}}\\cdot\\frac{{b_{{n}}}}{{b_{{a}}}}\\cdot\\frac{{s_{{n}}}}{{s_{{a}}}}
 
+Input: \\Lambda{id}=\\chi(X)
+Output: \\Lambda\\text{{id}}=\\chi(X)
+
 ### Important rule.
 RETURN ONLY THE LATEX. DO NOT RETURN ANYTHING ELSE.
-
 ### Now correct this:
 
 Input:  {raw}
 LaTeX:
 """.strip()
 
-load_dotenv() 
+load_dotenv()
 api_key = os.getenv("OPENAI_API_KEY", "key not in .env file")
 client = openai.OpenAI(api_key=api_key)
-
 
 def correct_latex(raw: str,
                   model: str = "gpt-4.1-nano",
                   temperature: float = 0.0,
                   max_tokens: int = 256) -> str:
     """
-    raw: LaTeX output from our model
-    model: gpt chat model
-    temperature: deterministic
-    max_tokens: limit for corrected output
+    Corrects potentially malformed LaTeX output from the Seq2Seq model.
     
-    returns: hopefully corrected string
+    Args:
+        raw: Raw LaTeX output from Seq2Seq model
+        model: OpenAI model to use
+        temperature: Control randomness (0.0 = deterministic)
+        max_tokens: Maximum output length
+        
+    Returns:
+        Corrected LaTeX string
     """
+    if not raw or raw.strip() == "": return raw
+        
     prompt = BASE_PROMPT.format(raw=raw)
     
-    # Use the carefully crafted prompt instead of a simple instruction
     response = client.chat.completions.create(
         model=model, 
         messages=[
@@ -63,19 +68,20 @@ def correct_latex(raw: str,
     # extract and clean response
     corrected = response.choices[0].message.content.strip()
     
-    # additional cleanup to remove potential "LaTeX:" prefix
-    # if corrected.startswith("LaTeX:"):
-    #     corrected = corrected[6:].strip()
+    if corrected.startswith("LaTeX:"): corrected = corrected[6:].strip()
     
     return corrected
 
-if __name__ == "__main__":
-    # Example usage:
-    raw_outputs = [
-        r"\int^{1} x^2 dx",         # \int_{0}^{1} x^2 \, dx
-        r"\frac{\frac{2}{3}}{1}",   # \frac{1}{\frac{2}{3}}
-        r"\Lambda{id}=\chi(X)"      # \Lambda\{id\}=\chi(X)
-    ]
-    for raw in raw_outputs:
-        fixed = correct_latex(raw)
-        print(f"Raw:    {raw}\nFixed:  {fixed}\n")
+
+_correction_cache = {}
+
+# cached to reduce api calls during testing
+def correct_latex_cached(raw: str, **kwargs) -> str:
+    if raw in _correction_cache:
+        return _correction_cache[raw]
+    
+    result = correct_latex(raw, **kwargs)
+    _correction_cache[raw] = result
+    return result
+
+correct_latex = correct_latex_cached
