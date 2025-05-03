@@ -377,7 +377,7 @@ As a result, these differences make the test set significantly more challenging 
 
 We evaluate using a combination of exact-match accuracy, character error rate (CER), and token accuracy for a comprehensive assessment of performance.
 
-## Inference Examples
+## Full Test Evaluation
 
 Example input:  
 mathwriting-2024/test/00c46c9b07b39bb7.inkml  
@@ -399,6 +399,8 @@ Sample predictions:
 | bi}=                        | \Lambda{id}=\chi(X)                                      |
 | f(y)=2                      | f(y)=2+2y+y{2}                                            |
 | F=\frac{}}}}}}}}}}}}}}}}}}}}}}}}}} | F=\frac{1}{4\pi\epsilon{r}\epsilon{0}}\frac{q{1}q{2}}{r{2}} |
+
+## Observations
 
 As seen above, our solution performs worse than the training set because our model fails to generalize and capture long handwritten mathematical equations. This is due to the dispersion of our attention mechanism, where it fails to focus on our equation, resulting in skipped or duplicated symbols. This problem becomes more severe as expression length increases, where it can predict the first few symbols correctly, but beyond that, it breaks down and doesn’t output the remaining sequence. In several test cases with more than 20 symbols, the model fails miserably. This might mean that our simple attention mechanism may not scale well to longer sequences.
 
