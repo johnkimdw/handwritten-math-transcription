@@ -2,7 +2,7 @@
 #$ -M dkim37@nd.edu     # Email address for job notification
 #$ -m be               	# Send mail when job begins (b), ends (e) and aborts (a)
 #$ -pe smp 24           # Specify number of cores to use.
-#$ -q gpu@qa-h100-001   # Run on the GPU cluster
+#$ -q gpu@qa-a100-003   # Run on the GPU cluster
 #$ -l gpu=1             # Run on 1 GPU card
 #$ -N graph_job         # Specify job name
 #$ -t 1                 # how many tasks
@@ -19,7 +19,7 @@ export SKLEARN_ALLOW_DEPRECATED_SKLEARN_PACKAGE_INSTALL=True
 # Report when job started
 echo "Job started at: $(date)"
 
-python main.py > run_nn_final_code.log
+python main.py > run_nn_final_code_positional.log
 
 # python main.py --dataset ogbg-molfreesolv --augmentation_method smogn --with_selection false --eval_metric mae --trails 5
 # > TEST.log

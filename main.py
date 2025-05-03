@@ -82,7 +82,7 @@ def train(model, train_loader, val_loader, epochs=50, lr=1e-3, clip=1.0, pad_idx
 
         if avg_v < best:
             best = avg_v
-            torch.save(model.state_dict(), f"model_v3_{epoch}.pth")
+            torch.save(model.state_dict(), f"model_v4_pos_{epoch}.pth")
         print(f"epoch {epoch} average train loss={avg_tr:.4f}  average val loss={avg_v:.4f}  tf={tf_ratio(epoch):.2f}")
 
 
@@ -194,12 +194,12 @@ def test_model(model, test_loader, criterion):
             true_latex = indices_to_latex(tseq, LATEX_VOCAB_REVERSE)
             
             # correct latex
-            fixed_latex = correct_latex(orig_latex)
+            # fixed_latex = correct_latex(orig_latex)
             
             if orig_latex == true_latex: correct_orig += 1
-            if fixed_latex == true_latex: correct_fixed += 1
+            # if fixed_latex == true_latex: correct_fixed += 1
                 
-            if fixed_latex == true_latex: correct += 1
+            # if fixed_latex == true_latex: correct += 1
                 
             if len(examples) < 5:
                 examples.append((
@@ -322,19 +322,19 @@ def main():
     print(f"Subset sizes → train: {len(train_ds)}, valid: {len(val_ds)}, test: {len(test_ds)}")
     # print("Running full train/valid/test set")
     train_loader = DataLoader(
-        full_train_ds, batch_size=BATCH_SIZE, shuffle=True,
+        train_ds, batch_size=BATCH_SIZE, shuffle=True,
         collate_fn=collate_variable_length_sequences
     )
     valid_loader = DataLoader(
-        full_val_ds, batch_size=BATCH_SIZE, shuffle=False,
+        val_ds, batch_size=BATCH_SIZE, shuffle=False,
         collate_fn=collate_variable_length_sequences
     )
     test_loader = DataLoader(
-        full_test_ds, batch_size=BATCH_SIZE, shuffle=False,
+        test_ds, batch_size=BATCH_SIZE, shuffle=False,
         collate_fn=collate_variable_length_sequences
     )
 
-    feat0, _ = full_train_ds[0]
+    feat0, _ = train_ds[0]
     input_dim = feat0.shape[1]
     encoder = Encoder(
         input_dim=input_dim, 
@@ -372,17 +372,18 @@ def main():
     print(f"Predicted: {pred_orig}")
     print(f"Actual:    {gt}\n")
     
+    print("Full test:")
+    test_model(
+        model, test_loader,
+        nn.CrossEntropyLoss(ignore_index=LATEX_PAD_TOKEN, label_smoothing=0.1)
+    )
+    
     print("With correction:")
     pred_fixed, _, _ = inference(model, ink_file_path=ink_path, apply_correction=True)
     print(f"Predicted: {pred_fixed}")
     print(f"Actual:    {gt}")
     print(f"Improvement: {'Yes' if pred_fixed == gt and pred_orig != gt else 'No'}")
 
-    print("Full test:")
-    test_model(
-        model, test_loader,
-        nn.CrossEntropyLoss(ignore_index=LATEX_PAD_TOKEN, label_smoothing=0.1)
-    )
 
     
 def indices_to_latex(indices, vocab_reverse):
