@@ -423,6 +423,21 @@ To reduce error rates and improve generalization, we propose the following chang
 - Maintain a small teacher forcing probability during inference to reduce train-test mismatch
 - Introduce adversarial training to target known weaknesses in the model
 
+### Part 5 Contributions
+- **Team**  
+  - Designed the overall evaluation pipeline and report structure.
+  - Tested and reported the current results.
+
+
+- **John Kim**
+  - Implemented the LLM corrector to correct LaTeX errors from model output
+  - Integrated corrector to inference and test scripts
+  - Trained new models and tested them
+
+- **Tram Trinh**  
+  - Implemented further changes to the model (e.g. add attention mechanisms, positional encoding, etc.)
+  - Integrated training & validation loops, including checkpoint saving.
+  - Updated test and train model scripts
 
 
 
