@@ -4,6 +4,7 @@ from torch.nn.utils.rnn import pad_sequence
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+import editdistance
 
 import os, subprocess
 from tqdm import tqdm
@@ -82,7 +83,7 @@ def train(model, train_loader, val_loader, epochs=50, lr=1e-3, clip=1.0, pad_idx
 
         if avg_v < best:
             best = avg_v
-            torch.save(model.state_dict(), f"model_v4_pos_{epoch}.pth")
+            torch.save(model.state_dict(), f"model_best_crc_full_data_{epoch}.pth")
         print(f"epoch {epoch} average train loss={avg_tr:.4f}  average val loss={avg_v:.4f}  tf={tf_ratio(epoch):.2f}")
 
 
@@ -160,67 +161,87 @@ def train(model, train_loader, val_loader, epochs=50, lr=1e-3, clip=1.0, pad_idx
 def test_model(model, test_loader, criterion):
     model.eval()
     total_loss = 0.0
-    correct = 0
-    total = 0
+    total_sequences = 0
+    exact_matches = 0
+
+    total_edits = 0
+    total_chars = 0
+
+    total_token_matches = 0
+    total_tokens = 0
+
     examples = []
     EOS = LATEX_VOCAB['<eos>']
-    
-    correct_orig = 0
-    correct_fixed = 0
 
-    for src, lengths, trg in tqdm(test_loader, desc="testing", leave=False):
+    for src, lengths, trg in tqdm(test_loader, desc="Testing", leave=False):
         src, lengths, trg = src.to(DEVICE), lengths.to(DEVICE), trg.to(DEVICE)
 
-        # no teacher forcing
+        # forward pass with no teacher forcing
         outputs = model(src, lengths, trg, teacher_forcing_ratio=0.0)
         B, T, V = outputs.size()
 
-        # compute and accumulate loss
+        # accumulate loss
         loss = criterion(
             outputs[:, 1:].reshape(-1, V),
             trg[:,    1:].reshape(-1)
         )
-        total_loss += loss.item()
+        total_loss += loss.item() * B
 
-        # greedy decode and accuracy counting
-        preds = outputs.argmax(dim=-1)
+        # greedy decode
+        preds = outputs.argmax(dim=-1)  # (B, T)
         for i in range(B):
+            # strip off SOS/EOS
             pseq = preds[i,1:].tolist()
             tseq = trg[i,1:].tolist()
             if EOS in pseq: pseq = pseq[:pseq.index(EOS)]
             if EOS in tseq: tseq = tseq[:tseq.index(EOS)]
-            
-            orig_latex = indices_to_latex(pseq, LATEX_VOCAB_REVERSE)
-            true_latex = indices_to_latex(tseq, LATEX_VOCAB_REVERSE)
-            
-            # correct latex
-            # fixed_latex = correct_latex(orig_latex)
-            
-            if orig_latex == true_latex: correct_orig += 1
-            # if fixed_latex == true_latex: correct_fixed += 1
-                
-            # if fixed_latex == true_latex: correct += 1
-                
+
+            # convert back to LaTeX
+            pred_ltx = indices_to_latex(pseq, LATEX_VOCAB_REVERSE)
+            true_ltx = indices_to_latex(tseq, LATEX_VOCAB_REVERSE)
+
+            total_sequences += 1
+            if pred_ltx == true_ltx:
+                exact_matches += 1
+
+            # --- character error rate ---
+            ed = editdistance.eval(pred_ltx, true_ltx)
+            total_edits += ed
+            total_chars += len(true_ltx)
+
+            # --- token accuracy (per‐symbol match) ---
+            # here we treat each character as a "token"
+            matches = sum(p == t for p, t in zip(pred_ltx, true_ltx))
+            total_token_matches += matches
+            total_tokens += len(true_ltx)
+
+            # save a few examples
             if len(examples) < 5:
-                examples.append((
-                    orig_latex,
-                    fixed_latex,
-                    true_latex
-                ))
-            total += 1
-           
+                examples.append((pred_ltx, true_ltx))
 
-    avg_loss = total_loss / len(test_loader)
-    exact_match_acc = correct / total if total else 0.0
+    # aggregate metrics
+    avg_loss = total_loss / total_sequences
+    exact_match_acc = exact_matches / total_sequences
+    cer = total_edits / total_chars
+    token_acc = total_token_matches / total_tokens
 
-    print(f"Test Loss: {avg_loss:.4f}")
-    print(f"Exact Match Accuracy: {exact_match_acc:.4f} ({correct}/{total})\n")
-    print("Sample predictions:")
+    print(f"\nTest Loss:            {avg_loss:.4f}")
+    print(f"Exact-match Accuracy: {exact_match_acc:.2%} ({exact_matches}/{total_sequences})")
+    print(f"Character Error Rate: {cer:.2%}")
+    print(f"Token Accuracy:       {token_acc:.2%}\n")
+
+    print("Some sample predictions:")
     for pred, true in examples:
-        print(f"Predicted: {pred}")
-        print(f"Actual: {true}\n")
+        print(f"  Predicted: {pred}")
+        print(f"    Actual: {true}\n")
 
-    return avg_loss, exact_match_acc, examples
+    return {
+        'loss': avg_loss,
+        'exact_match': exact_match_acc,
+        'cer': cer,
+        'token_acc': token_acc,
+        'examples': examples
+    }
 
 
 def inference(model, ink_file_path=None, ink_object=None, max_length=150, apply_correction=True):
@@ -228,71 +249,68 @@ def inference(model, ink_file_path=None, ink_object=None, max_length=150, apply_
     Ink file/object --> model --> LaTeX string
     """
     model.eval()
-    
-    # get the ink object first
-    if ink_object is None and ink_file_path is not None: ink = read_inkml_file(ink_file_path)
-    elif ink_object is not None:  ink = ink_object
-    else: raise ValueError("Either ink_file_path or ink_object must be provided")
-    
-    # ground_truth_latex = ink_object.annotations.get('normalizedLabel')
 
-    
-    # extract features from ink object
-    dataset = HMEDataset(root_dir="mathwriting-2024", split="train")
-    ink_features = dataset.extract_features(ink)
-    ground_truth_latex = ink.annotations['normalizedLabel']
-    
-    # handle empty feature case
-    if ink_features.size(0) == 0: return "<empty_features>"
-    
-    # add batch dimension (1, seq_len, feature_dim)
-    input_tensor = ink_features.unsqueeze(0).to(DEVICE)
-    input_length = torch.tensor([ink_features.size(0)]).to(DEVICE)
-    
+    # load Ink
+    if ink_object is None and ink_file_path:
+        ink = read_inkml_file(ink_file_path)
+    elif ink_object is not None:
+        ink = ink_object
+    else:
+        raise ValueError("Provide ink_file_path or ink_object")
+
+    true_ltx = ink.annotations['normalizedLabel']
+
+    # features
+    ds = HMEDataset(root_dir="mathwriting-2024", split="train")
+    feats = ds.extract_features(ink)
+    if feats.size(0) == 0:
+        return "<empty_features>", true_ltx, []
+
+    src = feats.unsqueeze(0).to(DEVICE)
+    lengths = torch.tensor([feats.size(0)]).to(DEVICE)
+
     with torch.no_grad():
-        # initialize with SOS token
-        input_token = torch.tensor([LATEX_VOCAB['<sos>']]).to(DEVICE)
-        
-        # encoder forward pass
-        encoder_outputs, (hidden, cell) = model.encoder(input_tensor, input_length)
-        
-        # handle bidirectional encoder
+        # encoder
+        enc_out, (h, c) = model.encoder(src, lengths)
         if model.encoder.bidirectional:
-            hidden = hidden.view(model.encoder.num_layers, 2, hidden.size(1), hidden.size(2)).sum(dim=1)
-            cell = cell.view(model.encoder.num_layers, 2, cell.size(1), cell.size(2)).sum(dim=1)
-        
-        # attention mask
-        mask = model.create_mask(input_tensor)
-        
-        # generate sequence
-        output_indices = [LATEX_VOCAB['<sos>']]
-        attention_weights = []
-        
+            h = h.view(model.encoder.num_layers, 2, 1, -1).sum(dim=1)
+            c = c.view(model.encoder.num_layers, 2, 1, -1).sum(dim=1)
+        mask = model.create_mask(src)
+
+        # decode
+        token = torch.tensor([LATEX_VOCAB['<sos>']]).to(DEVICE)
+        out_idx = [LATEX_VOCAB['<sos>']]
+        attn_weights = []
         for _ in range(max_length):
-            # forward pass through decoder
-            prediction, hidden, cell, attn_weights = model.decoder(
-                input_token, hidden, cell, encoder_outputs, mask
-            )
-            
-            # store attention weights if needed
-            attention_weights.append(attn_weights.squeeze(0).cpu())
-            
-            # get most likely token
-            top_token = prediction.argmax(1).item()
-            output_indices.append(top_token)
-            
-            # end if EOS token
-            if top_token == LATEX_VOCAB['<eos>']:break
-            
-            # update input token for next step
-            input_token = torch.tensor([top_token]).to(DEVICE)
-    
-    # convert indices to LaTeX
-    latex_output = indices_to_latex(output_indices, LATEX_VOCAB_REVERSE)
-    
-    if apply_correction: latex_output = correct_latex(latex_output)
-    
-    return latex_output, ground_truth_latex, attention_weights
+            logits, h, c, aw = model.decoder(token, h, c, enc_out, mask)
+            attn_weights.append(aw.squeeze(0).cpu())
+            top = logits.argmax(1).item()
+            out_idx.append(top)
+            if top == LATEX_VOCAB['<eos>']:
+                break
+            token = torch.tensor([top]).to(DEVICE)
+
+    pred_ltx = indices_to_latex(out_idx, LATEX_VOCAB_REVERSE)
+    corrected = pred_ltx
+    if apply_correction:
+        try:
+            corrected = correct_latex(pred_ltx)
+        except Exception as e:
+            corrected = pred_ltx
+
+    # compute per‐sample metrics
+    ed = editdistance.eval(corrected, true_ltx)
+    cer = ed / len(true_ltx) if len(true_ltx) > 0 else 0.0
+    token_matches = sum(p == t for p, t in zip(corrected, true_ltx))
+    token_acc = token_matches / len(true_ltx) if len(true_ltx) > 0 else 0.0
+
+    print(f"\nInference on: {ink_file_path or 'ink_object'}")
+    print(f"  Predicted: {corrected}")
+    print(f"  Actual:    {true_ltx}")
+    print(f"  CER:       {cer:.2%}")
+    print(f"  Token Acc: {token_acc:.2%}\n")
+
+    return corrected, true_ltx, attn_weights
 
 
 
@@ -336,27 +354,35 @@ def main():
 
     feat0, _ = train_ds[0]
     input_dim = feat0.shape[1]
-    encoder = Encoder(
-        input_dim=input_dim, 
-        proj_dim=128,           
-        hidden_dim=256,         
-        num_layers=2,           
-        bidirectional=True,     
-        dropout=0.3             
-    )
+
+    encoder = Encoder(input_dim=input_dim)
     decoder = Decoder(
-        output_dim=len(LATEX_VOCAB),
-        embed_dim=128,          
-        encoder_hidden_dim=256, 
-        decoder_hidden_dim=256, 
-        num_layers=2,           
-        dropout=0.3,            
-        num_heads=4             
+        output_dim=len(LATEX_VOCAB), 
+        embed_dim=64, encoder_hidden_dim=128, decoder_hidden_dim=128
     )
     model = Seq2Seq(encoder, decoder, DEVICE).to(DEVICE)
 
-    ckpt = "model_att/model_best_crc_full_data.pth"
-    ckpt = "train model"
+    # encoder = Encoder(
+    #     input_dim=input_dim, 
+    #     proj_dim=128,           
+    #     hidden_dim=256,         
+    #     num_layers=2,           
+    #     bidirectional=True,     
+    #     dropout=0.3             
+    # )
+    # decoder = Decoder(
+    #     output_dim=len(LATEX_VOCAB),
+    #     embed_dim=128,          
+    #     encoder_hidden_dim=256, 
+    #     decoder_hidden_dim=256, 
+    #     num_layers=2,           
+    #     dropout=0.3,            
+    #     num_heads=4             
+    # )
+    # model = Seq2Seq(encoder, decoder, DEVICE).to(DEVICE)
+
+    ckpt = "model/model_best_crc_full_data.pth"
+    #  ckpt = "train model"
     if os.path.exists(ckpt):
         print("Loading checkpoint…")
         model.load_state_dict(torch.load(ckpt, map_location=DEVICE))
@@ -372,17 +398,24 @@ def main():
     print(f"Predicted: {pred_orig}")
     print(f"Actual:    {gt}\n")
     
-    print("Full test:")
-    test_model(
-        model, test_loader,
-        nn.CrossEntropyLoss(ignore_index=LATEX_PAD_TOKEN, label_smoothing=0.1)
-    )
-    
     print("With correction:")
     pred_fixed, _, _ = inference(model, ink_file_path=ink_path, apply_correction=True)
     print(f"Predicted: {pred_fixed}")
     print(f"Actual:    {gt}")
     print(f"Improvement: {'Yes' if pred_fixed == gt and pred_orig != gt else 'No'}")
+
+    print("Full test evaluation:")
+    metrics = test_model(
+        model,
+        test_loader,
+        nn.CrossEntropyLoss(ignore_index=LATEX_PAD_TOKEN, label_smoothing=0.1)
+    )
+
+    print("\nSummary:")
+    print(f"  Test Loss:            {metrics['loss']:.4f}")
+    print(f"  Exact-match Acc:      {metrics['exact_match']:.2%}")
+    print(f"  Character Error Rate: {metrics['cer']:.2%}")
+    print(f"  Token Accuracy:       {metrics['token_acc']:.2%}")
 
 
     

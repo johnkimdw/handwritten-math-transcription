@@ -35,7 +35,7 @@ load_dotenv()
 api_key = os.getenv("OPENAI_API_KEY", "key not in .env file")
 client = openai.OpenAI(api_key=api_key)
 
-def correct_latex(raw: str,
+def _correct_latex_raw(raw: str,
                   model: str = "gpt-4.1-nano",
                   temperature: float = 0.0,
                   max_tokens: int = 256) -> str:
@@ -53,7 +53,7 @@ def correct_latex(raw: str,
     """
     if not raw or raw.strip() == "": return raw
         
-    prompt = BASE_PROMPT.format(raw=raw)
+    prompt = BASE_PROMPT.replace("{raw}", raw)
     
     response = client.chat.completions.create(
         model=model, 
@@ -76,12 +76,9 @@ def correct_latex(raw: str,
 _correction_cache = {}
 
 # cached to reduce api calls during testing
-def correct_latex_cached(raw: str, **kwargs) -> str:
+def correct_latex(raw: str, **kwargs) -> str:
     if raw in _correction_cache:
         return _correction_cache[raw]
-    
-    result = correct_latex(raw, **kwargs)
-    _correction_cache[raw] = result
-    return result
-
-correct_latex = correct_latex_cached
+    fixed = _correct_latex_raw(raw, **kwargs)
+    _correction_cache[raw] = fixed
+    return fixed

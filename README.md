@@ -386,7 +386,7 @@ Actual: l_{n}=k l_{n}\cdot\frac{b_{n}}{b_{a}}\cdot\frac{s_{n}}{s_{a}}
 
 Full test evaluation:
 - Test loss: 3.4032
-- Exact match accuracy: 0.14% (11/7644)
+- Exact match accuracy: 0.16% (12/7644)
 - Character Error Rate: 85.28%
 - Token Accuracy 17.76%
 
@@ -402,17 +402,19 @@ Sample predictions:
 
 As seen above, our solution performs worse than the training set because our model fails to generalize and capture long handwritten mathematical equations. This is due to the dispersion of our attention mechanism, where it fails to focus on our equation, resulting in skipped or duplicated symbols. This problem becomes more severe as expression length increases, where it can predict the first few symbols correctly, but beyond that, it breaks down and doesn’t output the remaining sequence. In several test cases with more than 20 symbols, the model fails miserably. This might mean that our simple attention mechanism may not scale well to longer sequences.
 
-We also think a big part of this is because during training, we use teacher-forcing, so we feed the ground-truth token at each step. However, during testing, we do not so one mistake easily compounds and affects the whole LaTeX, decreasing the accuracy. We might also be overfitting as our test accuracy is much worse than our train and valid. We think that the test dataset is all in the same domain, but since there are thousands of samples to go through, we were unable to truly verify this. 
+After a several attempts of model architecture changes from implementing multi-head attention, increasing number of layers, or adding positional encoding, the model does seem to perform better on the test set, so we finalize our thoughts on the current issues:
+
+- We also think a big part of this is because during training, we use teacher-forcing, so we feed the ground-truth token at each step, that makes our model see the correct context throughout, so it learns to predict the next token very accurately. However, during testing, we do not so; the model must feed its own previous prediction back in, and one mistake easily compounds and affects the whole LaTeX, decreasing the accuracy. 
+- We might also be overfitting as our test accuracy is much worse than our train and valid. 
+- We also suspect the provided test set comes from a different domain than the training and validation sets, but since there are thousands of samples to go through, we were unable to truly verify this. 
 
 ## Proposed Improvements
 
 To reduce error rates and improve generalization, we propose the following changes:
 
-### 1. Model architecture changes
-- Replace simple attention with multi-head attention (similar to Transformer models)
-- Add a coverage mechanism to track attended input regions and reduce omissions
-- Introduce a structure recognition module to better capture mathematical hierarchies
-- Use beam search decoding to improve output quality
+### 1. Bridging Train-Test Exposure Bias
+– Implement scheduled sampling during training: at each decoding step, randomly feed the model’s own previous prediction instead of the ground-truth token. 
+– Always evaluate validation performance with free-run decoding (greedy or beam search), matching the test-time protocol so our dev metrics reflect real‐world behavior.
 
 ### 2. Fine-tune the language model rather than relying on zero-shot prompting
 - Fine-tune + train on common LaTeX error patterns to improve correction capabilities
