@@ -37,8 +37,8 @@ from corrector import correct_latex
 #     return model
 
 def train(model, train_loader, val_loader, epochs=50, lr=1e-3, clip=1.0, pad_idx=0):
-    if not os.path.exists("model"):
-        os.makedirs("model")
+    if not os.path.exists("model_att"):
+        os.makedirs("model_att")
 
     opt   = torch.optim.Adam(model.parameters(), lr=lr)
     sched = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, 'min', patience=2)
@@ -306,9 +306,9 @@ def main():
     full_test_ds  = HMEDataset(data_root, "test")
     print(f"Full sizes → train: {len(full_train_ds)}, valid: {len(full_val_ds)}, test: {len(full_test_ds)}")
 
-    TRAIN_SUBSET_SIZE = 10_000
-    VAL_SUBSET_SIZE   = 2_000
-    TEST_SUBSET_SIZE  = 2_000
+    TRAIN_SUBSET_SIZE = 200000
+    VAL_SUBSET_SIZE   = 15000
+    TEST_SUBSET_SIZE  = 7000
 
     def sample(ds, size, seed):
         idxs = list(range(len(ds)))
@@ -355,7 +355,7 @@ def main():
     )
     model = Seq2Seq(encoder, decoder, DEVICE).to(DEVICE)
 
-    ckpt = "model/model_best_crc_full_data.pth"
+    ckpt = "model_att/model_best_crc_full_data.pth"
     ckpt = "train model"
     if os.path.exists(ckpt):
         print("Loading checkpoint…")

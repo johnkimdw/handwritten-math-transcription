@@ -307,6 +307,11 @@ All code lives in **`main.py`**. To reproduce our first results:
 pip install -r requirements.txt
 ```
 
+**Create .env file**
+if you want to use the LLM corrector.
+1. Create .env file
+2. add: OPEN_API_KEY=your_api_key...
+
 ### Train & Validate 
 
 ```
@@ -318,6 +323,7 @@ python main.py
 - Note: main.py does not yet accept CLI arguments — all paths, subset sizes, batch-size, epochs, etc. are hard-coded.
 
 ### Single Example Inference
+Change in main function in main.py but it should be run automatically after train and test models.
 ```
 python main.py
 ```

@@ -1,36 +1,94 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import math
 
 import random
 import subprocess
 
 from config import *
 
+# Add positional encoding to a sequence
+class PositionalEncoding(nn.Module):
+    def __init__(self, d_model, dropout=0.1, max_len=5000):
+        super().__init__()
+        self.dropout = nn.Dropout(p=dropout)
+
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len).unsqueeze(1).float()
+        div_term = torch.exp(
+            torch.arange(0, d_model, 2).float() * -(math.log(10000.0) / d_model)
+        )
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(0)  # shape (1, max_len, d_model)
+        self.register_buffer('pe', pe)
+
+    def forward(self, x):
+        x = x + self.pe[:, :x.size(1)]
+        return self.dropout(x)
+
 class Encoder(nn.Module):
     def __init__(self, input_dim, proj_dim=64, hidden_dim=128, num_layers=2, bidirectional=True, dropout=0.3):
         super(Encoder, self).__init__()
-        self.num_layers    = num_layers
+        # self.num_layers    = num_layers
+        # self.bidirectional = bidirectional
+        # self.proj = nn.Sequential(
+        #     nn.Linear(input_dim, proj_dim),
+        #     nn.ReLU(),
+        #     nn.Dropout(dropout),
+        # )
+        # self.lstm = nn.LSTM(
+        #     proj_dim, hidden_dim, num_layers=num_layers,
+        #     bidirectional=bidirectional, batch_first=True,
+        #     dropout=dropout if num_layers>1 else 0
+        # )
+
+        self.num_layers = num_layers
         self.bidirectional = bidirectional
+
+        # project raw stroke features into proj_dim
         self.proj = nn.Sequential(
             nn.Linear(input_dim, proj_dim),
             nn.ReLU(),
             nn.Dropout(dropout),
         )
+
+        # add positional encoding
+        self.pos_encoder = PositionalEncoding(proj_dim, dropout)
+
+        # bidirectional LSTM
         self.lstm = nn.LSTM(
-            proj_dim, hidden_dim, num_layers=num_layers,
-            bidirectional=bidirectional, batch_first=True,
-            dropout=dropout if num_layers>1 else 0
+            proj_dim,
+            hidden_dim,
+            num_layers=num_layers,
+            bidirectional=bidirectional,
+            batch_first=True,
+            dropout=dropout if num_layers > 1 else 0
         )
 
     def forward(self, x, lengths):
         # x: (B, T, input_dim)
-        x = self.proj(x)  # (B, T, proj_dim)
+        # x = self.proj(x)  # (B, T, proj_dim)
+        # packed = nn.utils.rnn.pack_padded_sequence(
+        #     x, lengths.cpu(), batch_first=True, enforce_sorted=False)
+        # o, (h, c) = self.lstm(packed)
+        # o, _ = nn.utils.rnn.pad_packed_sequence(o, batch_first=True)
+        # return o, (h, c)
+
+        # project and add positional info
+        x = self.proj(x)               # (batch, seq_len, proj_dim)
+        x = self.pos_encoder(x)        # (batch, seq_len, proj_dim)
+
+        # pack/pad for variable-length LSTM
         packed = nn.utils.rnn.pack_padded_sequence(
-            x, lengths.cpu(), batch_first=True, enforce_sorted=False)
-        o, (h, c) = self.lstm(packed)
-        o, _ = nn.utils.rnn.pad_packed_sequence(o, batch_first=True)
-        return o, (h, c)
+            x, lengths.cpu(), batch_first=True, enforce_sorted=False
+        )
+        packed_out, (h, c) = self.lstm(packed)
+        outputs, _ = nn.utils.rnn.pad_packed_sequence(
+            packed_out, batch_first=True
+        )
+        return outputs, (h, c)
     
 # class Attention(nn.Module):
 #     def __init__(self, encoder_hidden_dim, decoder_hidden_dim):
@@ -56,7 +114,7 @@ class Encoder(nn.Module):
 class MultiHeadAttention(nn.Module):
     def __init__(self, enc_hidden_dim, dec_hidden_dim, num_heads=4, dropout=0.3):
         super().__init__()
-        self.enc_dim = enc_hidden_dim * 2
+        self.enc_dim = enc_hidden_dim * 2  # bidirectional
         self.dec_dim = dec_hidden_dim
 
         # project decoder hidden state into encoder‐dim for queries
@@ -75,11 +133,11 @@ class MultiHeadAttention(nn.Module):
         # encoder_outputs:  (batch, seq_len, enc_dim)
         # mask:             (batch, seq_len)  boolean (True=valid)
 
-        # 1) project query
+        # project query
         q = self.proj_q(hidden)           # (batch, enc_dim)
         q = q.unsqueeze(1)                # (batch, 1, enc_dim)
 
-        # 2) multi-head attention
+        # multi-head attention
         # key_padding_mask expects True==pad, so invert mask
         key_pad = ~mask                   # (batch, seq_len)
         attn_output, attn_weights = self.mha(
@@ -100,9 +158,24 @@ class Decoder(nn.Module):
         self.embedding = nn.Embedding(output_dim, embed_dim)
         self.embed_drop = nn.Dropout(dropout)
         
-        self.lstm = nn.LSTM(embed_dim + encoder_hidden_dim * 2, decoder_hidden_dim, num_layers=num_layers, batch_first=True, dropout=dropout if num_layers>1 else 0)
-        self.attention = MultiHeadAttention(encoder_hidden_dim, decoder_hidden_dim, num_heads=num_heads, dropout=dropout)
+        # self.lstm = nn.LSTM(embed_dim + encoder_hidden_dim * 2, decoder_hidden_dim, num_layers=num_layers, batch_first=True, dropout=dropout if num_layers>1 else 0)
+        # self.attention = MultiHeadAttention(encoder_hidden_dim, decoder_hidden_dim, num_heads=num_heads, dropout=dropout)
         
+        # attention + LSTM
+        self.attention = MultiHeadAttention(
+            encoder_hidden_dim,
+            decoder_hidden_dim,
+            num_heads=num_heads,
+            dropout=dropout
+        )
+        self.lstm = nn.LSTM(
+            embed_dim + encoder_hidden_dim * 2,
+            decoder_hidden_dim,
+            num_layers=num_layers,
+            batch_first=True,
+            dropout=dropout if num_layers > 1 else 0
+        )
+
         self.fc_out = nn.Sequential(
             nn.Linear(decoder_hidden_dim + encoder_hidden_dim*2 + embed_dim, decoder_hidden_dim),
             nn.ReLU(),
@@ -130,7 +203,7 @@ class Decoder(nn.Module):
 
         # predict next token
         context = context.squeeze(1)      # (batch, enc_dim)
-        emb     = emb.squeeze(1)          # (batch, embed_dim)
+        emb = emb.squeeze(1)              # (batch, embed_dim)
         combined = torch.cat((out, context, emb), dim=1)  # (batch, dec+enc+emb)
         pred = self.fc_out(combined)      # (batch, output_dim)
         return self.layer_norm(pred), hidden, cell, attn_w
@@ -151,8 +224,7 @@ class Seq2Seq(nn.Module):
     def forward(self, src, src_lengths, trg, teacher_forcing_ratio=0.5):
         # src: (batch, src_seq_len, feature_dim)
         # trg: (batch, trg_seq_len) where each element is a token index
-        batch_size = src.shape[0]
-        trg_len = trg.shape[1]
+        batch_size, trg_len = trg.shape
         trg_vocab_size = self.decoder.output_dim
         
         outputs = torch.zeros(batch_size, trg_len, trg_vocab_size).to(self.device)
@@ -162,8 +234,8 @@ class Seq2Seq(nn.Module):
         # if the encoder is bidirectional, combine the two directions for each layer
         if self.encoder.bidirectional:
             # hidden: (num_layers*2, batch, hidden_dim) -> reshape to (num_layers, 2, batch, hidden_dim)
-            hidden = hidden.view(self.encoder.num_layers, 2, hidden.size(1), hidden.size(2)).sum(dim=1)
-            cell = cell.view(self.encoder.num_layers, 2, cell.size(1), cell.size(2)).sum(dim=1)
+            hidden = hidden.view(self.encoder.num_layers, 2, batch_size, -1).sum(dim=1)
+            cell = cell.view(self.encoder.num_layers, 2, batch_size, -1).sum(dim=1)
         
         # mask for attention
         mask = self.create_mask(src)
