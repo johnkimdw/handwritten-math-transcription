@@ -310,7 +310,7 @@ pip install -r requirements.txt
 **Create .env file**
 if you want to use the LLM corrector.
 1. Create .env file
-2. add: OPEN_API_KEY=your_api_key...
+2. add: OPENAI_API_KEY=your_api_key...
 
 ### Train & Validate 
 
