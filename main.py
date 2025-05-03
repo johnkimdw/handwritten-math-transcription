@@ -52,7 +52,7 @@ def train(model, train_loader, val_loader, epochs=50, lr=1e-3, clip=1.0, pad_idx
     for epoch in range(epochs):
         model.train()
         running_loss = 0.0
-        train_bar = tqdm(train_loader, desc=f"Epoch {epoch} [train]", leave=False)
+        # train_bar = tqdm(train_loader, desc=f"Epoch {epoch} [train]", leave=False)
         for src, L, trg in train_loader:
             src, L, trg = src.to(model.device), L.to(model.device), trg.to(model.device)
             opt.zero_grad()
@@ -63,26 +63,26 @@ def train(model, train_loader, val_loader, epochs=50, lr=1e-3, clip=1.0, pad_idx
             nn.utils.clip_grad_norm_(model.parameters(), clip)
             opt.step()
             running_loss += loss.item()
-            train_bar.set_postfix(train_loss=running_loss/(train_bar.n+1))
+            # train_bar.set_postfix(train_loss=running_loss/(train_bar.n+1))
         avg_tr = running_loss / len(train_loader)
 
         model.eval()
         val_loss = 0.0
-        val_bar = tqdm(val_loader, desc=f"Epoch {epoch} [valid]", leave=False)
+        # val_bar = tqdm(val_loader, desc=f"Epoch {epoch} [valid]", leave=False)
         with torch.no_grad():
             for src, L, trg in val_loader:
                 src, L, trg = src.to(model.device), L.to(model.device), trg.to(model.device)
                 preds = model(src, L, trg, 0.0)
                 B, T, V = preds.size()
                 val_loss += crit(preds[:,1:].reshape(-1,V), trg[:,1:].reshape(-1)).item()
-                val_bar.set_postfix(val_loss=val_loss/(val_bar.n+1))
+                # val_bar.set_postfix(val_loss=val_loss/(val_bar.n+1))
 
         avg_v = val_loss/len(val_loader)
         sched.step(avg_v)
 
         if avg_v < best:
             best = avg_v
-            torch.save(model.state_dict(), f"model_multi_{epoch}.pth")
+            torch.save(model.state_dict(), f"model_v3_{epoch}.pth")
         print(f"epoch {epoch} average train loss={avg_tr:.4f}  average val loss={avg_v:.4f}  tf={tf_ratio(epoch):.2f}")
 
 
@@ -320,21 +320,21 @@ def main():
     test_ds  = sample(full_test_ds,  TEST_SUBSET_SIZE,  seed=44)
 
     print(f"Subset sizes → train: {len(train_ds)}, valid: {len(val_ds)}, test: {len(test_ds)}")
-
+    # print("Running full train/valid/test set")
     train_loader = DataLoader(
-        train_ds, batch_size=BATCH_SIZE, shuffle=True,
+        full_train_ds, batch_size=BATCH_SIZE, shuffle=True,
         collate_fn=collate_variable_length_sequences
     )
     valid_loader = DataLoader(
-        val_ds, batch_size=BATCH_SIZE, shuffle=False,
+        full_val_ds, batch_size=BATCH_SIZE, shuffle=False,
         collate_fn=collate_variable_length_sequences
     )
     test_loader = DataLoader(
-        test_ds, batch_size=BATCH_SIZE, shuffle=False,
+        full_test_ds, batch_size=BATCH_SIZE, shuffle=False,
         collate_fn=collate_variable_length_sequences
     )
 
-    feat0, _ = train_ds[0]
+    feat0, _ = full_train_ds[0]
     input_dim = feat0.shape[1]
     encoder = Encoder(
         input_dim=input_dim, 

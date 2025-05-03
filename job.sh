@@ -2,7 +2,7 @@
 #$ -M dkim37@nd.edu     # Email address for job notification
 #$ -m be               	# Send mail when job begins (b), ends (e) and aborts (a)
 #$ -pe smp 24           # Specify number of cores to use.
-#$ -q gpu@qa-a100-003   # Run on the GPU cluster
+#$ -q gpu@qa-h100-001   # Run on the GPU cluster
 #$ -l gpu=1             # Run on 1 GPU card
 #$ -N graph_job         # Specify job name
 #$ -t 1                 # how many tasks

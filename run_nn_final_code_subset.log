@@ -1,0 +1,63 @@
+Device: cuda
+mathwriting-2024 already exists. skipping download.
+Data at: mathwriting-2024
+Full sizes → train: 229864, valid: 15674, test: 7644
+Subset sizes → train: 10000, valid: 2000, test: 2000
+Training new model…
+epoch 0 average train loss=2.0886  average val loss=3.6729  tf=0.83
+epoch 1 average train loss=1.9839  average val loss=3.9932  tf=0.80
+epoch 2 average train loss=1.9461  average val loss=4.0802  tf=0.77
+epoch 3 average train loss=1.9236  average val loss=3.9151  tf=0.73
+epoch 4 average train loss=1.8916  average val loss=3.7947  tf=0.69
+epoch 5 average train loss=1.8965  average val loss=3.6736  tf=0.65
+epoch 6 average train loss=1.9293  average val loss=3.6051  tf=0.60
+epoch 7 average train loss=1.9472  average val loss=3.5172  tf=0.55
+epoch 8 average train loss=1.9660  average val loss=3.4575  tf=0.50
+epoch 9 average train loss=1.9984  average val loss=3.3632  tf=0.45
+epoch 10 average train loss=2.0527  average val loss=3.2236  tf=0.40
+epoch 11 average train loss=2.0629  average val loss=3.2213  tf=0.36
+epoch 12 average train loss=2.1166  average val loss=3.0925  tf=0.31
+epoch 13 average train loss=2.1578  average val loss=3.0211  tf=0.27
+epoch 14 average train loss=2.1952  average val loss=2.9363  tf=0.23
+epoch 15 average train loss=2.2366  average val loss=2.8947  tf=0.20
+epoch 16 average train loss=2.2675  average val loss=2.8427  tf=0.17
+epoch 17 average train loss=2.3025  average val loss=2.7858  tf=0.14
+epoch 18 average train loss=2.3207  average val loss=2.7823  tf=0.12
+epoch 19 average train loss=2.3403  average val loss=2.7715  tf=0.10
+epoch 20 average train loss=2.3562  average val loss=2.7677  tf=0.08
+epoch 21 average train loss=2.3585  average val loss=2.7550  tf=0.07
+epoch 22 average train loss=2.3647  average val loss=2.7186  tf=0.06
+epoch 23 average train loss=2.3711  average val loss=2.7239  tf=0.05
+epoch 24 average train loss=2.3778  average val loss=2.6829  tf=0.04
+epoch 25 average train loss=2.3704  average val loss=2.7369  tf=0.03
+epoch 26 average train loss=2.3952  average val loss=2.7060  tf=0.03
+epoch 27 average train loss=2.3746  average val loss=2.7272  tf=0.02
+epoch 28 average train loss=2.3667  average val loss=2.7295  tf=0.02
+epoch 29 average train loss=2.3728  average val loss=2.7421  tf=0.01
+epoch 30 average train loss=2.3761  average val loss=2.7483  tf=0.01
+epoch 31 average train loss=2.3701  average val loss=2.7405  tf=0.01
+epoch 32 average train loss=2.3660  average val loss=2.7416  tf=0.01
+epoch 33 average train loss=2.3703  average val loss=2.7434  tf=0.01
+epoch 34 average train loss=2.3780  average val loss=2.7435  tf=0.01
+epoch 35 average train loss=2.3751  average val loss=2.7435  tf=0.00
+epoch 36 average train loss=2.3800  average val loss=2.7434  tf=0.00
+epoch 37 average train loss=2.3815  average val loss=2.7432  tf=0.00
+epoch 38 average train loss=2.3756  average val loss=2.7434  tf=0.00
+epoch 39 average train loss=2.3719  average val loss=2.7434  tf=0.00
+epoch 40 average train loss=2.3738  average val loss=2.7433  tf=0.00
+epoch 41 average train loss=2.3772  average val loss=2.7433  tf=0.00
+epoch 42 average train loss=2.3703  average val loss=2.7433  tf=0.00
+epoch 43 average train loss=2.3771  average val loss=2.7432  tf=0.00
+epoch 44 average train loss=2.3668  average val loss=2.7432  tf=0.00
+epoch 45 average train loss=2.3775  average val loss=2.7432  tf=0.00
+epoch 46 average train loss=2.3810  average val loss=2.7431  tf=0.00
+epoch 47 average train loss=2.3688  average val loss=2.7431  tf=0.00
+epoch 48 average train loss=2.3675  average val loss=2.7431  tf=0.00
+epoch 49 average train loss=2.3816  average val loss=2.7431  tf=0.00
+
+Example inference on mathwriting-2024/test/00c46c9b07b39bb7.inkml
+Without correction:
+Predicted: lim{}
+Actual:    l_{n}=kl_{n}\cdot\frac{b_{n}}{b_{a}}\cdot\frac{s_{n}}{s_{a}}
+
+With correction:
