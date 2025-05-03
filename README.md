@@ -374,9 +374,6 @@ As a result, these differences make the test set significantly more challenging 
 |----------------------------------|----------|
 | Final training loss              | 2.63     |
 | Final validation loss            | 3.06     |
-| Validation exact-match accuracy  | 92%      |
-| Validation character error rate  | 3.2%     |
-| Validation token accuracy        | 95.8%    |
 
 We evaluate using a combination of exact-match accuracy, character error rate (CER), and token accuracy for a comprehensive assessment of performance.
 
@@ -388,8 +385,10 @@ Predicted: l}{
 Actual: l_{n}=k l_{n}\cdot\frac{b_{n}}{b_{a}}\cdot\frac{s_{n}}{s_{a}}
 
 Full test evaluation:
-- Test loss: 3.4003  
-- Exact match accuracy: 0.0006 (3/5000)
+- Test loss: 3.4032
+- Exact match accuracy: 0.14% (11/7644)
+- Character Error Rate: 85.28%
+- Token Accuracy 17.76%
 
 Sample predictions:
 
@@ -401,8 +400,9 @@ Sample predictions:
 | f(y)=2                      | f(y)=2+2y+y{2}                                            |
 | F=\frac{}}}}}}}}}}}}}}}}}}}}}}}}}} | F=\frac{1}{4\pi\epsilon{r}\epsilon{0}}\frac{q{1}q{2}}{r{2}} |
 
-As seen above, our solution performs worse than the training set because our model fails to generalize and capture long handwritten mathematical equations. This is due to the dispersion of our attention mechanism, where it fails to focus on our equation, resulting in skipped or duplicated symbols. This problem becomes more severe as expression length increases, where it can predict the first few symbols correctly, but beyond that, it breaks down and doesn’t output the remaining sequence. In several test cases with more than 20 symbols, we observed the model's attention weights becoming diffuse across multiple input strokes, leading to incorrect symbol prediction or omission. This indicates that our simple attention mechanism may not scale well to longer sequences.
+As seen above, our solution performs worse than the training set because our model fails to generalize and capture long handwritten mathematical equations. This is due to the dispersion of our attention mechanism, where it fails to focus on our equation, resulting in skipped or duplicated symbols. This problem becomes more severe as expression length increases, where it can predict the first few symbols correctly, but beyond that, it breaks down and doesn’t output the remaining sequence. In several test cases with more than 20 symbols, we observed the model's attention weights becoming diffuse across multiple input strokes, leading to incorrect symbol prediction or omission. This shows that our simple attention mechanism may not scale well to longer sequences.
 
+We also think a big part of this is because the model is overfitting as our test accuracy is much worse than our train and valid. We think that the test dataset is all in the same domain, but since there are thousands of samples to go through, we were unable to truly verify this. 
 
 ## Proposed Improvements
 
@@ -415,7 +415,7 @@ To reduce error rates and improve generalization, we propose the following chang
 - Use beam search decoding to improve output quality
 
 ### 2. Fine-tune the language model rather than relying on zero-shot prompting
-- Train on common LaTeX error patterns to improve correction capabilities
+- Fine-tune + train on common LaTeX error patterns to improve correction capabilities
 
 ### 3. Training strategy improvements
 - Implement curriculum learning to gradually increase expression complexity
@@ -423,7 +423,6 @@ To reduce error rates and improve generalization, we propose the following chang
 - Maintain a small teacher forcing probability during inference to reduce train-test mismatch
 - Introduce adversarial training to target known weaknesses in the model
 
-By applying these improvements, we hope to better capture the complexity of handwritten mathematical expressions and improve the model’s performance on challenging test cases.
 
 
 
